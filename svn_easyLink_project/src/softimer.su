@@ -1,0 +1,3 @@
+softimer.c:34:6:SofTimerInit	0	static
+softimer.c:48:6:SofTimerSet	16	static
+softimer.c:62:7:SofTimerCheck	16	static

@@ -1,0 +1,539 @@
+#include "../inc/global.h"
+
+
+// ===== Added by ZhangYuan 2016-11-15 ==============
+//#define UI_BMP_LOGO_DEBUG_	
+
+typedef unsigned long       DWORD;
+typedef int                 BOOL;
+typedef unsigned char       BYTE;
+typedef unsigned short      WORD;
+typedef short 				SHORT;
+typedef long 				LONG;
+
+
+typedef struct BMP_FILE_HEADER
+{
+	WORD	usFileType;
+	DWORD	ulngFileSize;
+	WORD	usRsv1;
+	WORD	usRsv2;
+	DWORD	ulngFileOffBits;
+}BMP_FILE_HEADER;
+
+typedef struct BMP_INFO_HEADER
+{
+	DWORD	ulngSize;
+	LONG	lngWidth;
+	LONG	lngHeight;
+	WORD	usPlanes;
+	WORD	usBitCount;
+	DWORD	ulngCompression;
+	DWORD	ulngSizeImg;
+	LONG	lngXPelsPerMeter;
+	LONG	lngYPelsPerMeter;
+	DWORD	ulngClrUsed;
+	DWORD	ulngClrImportant;
+}BMP_INFO_HEADER;
+
+int BmpConvert(unsigned char *pucFileName, unsigned char *pucConvBmp, unsigned int uiConvBmpSize)
+{
+	unsigned char	aucBmpBuff[1024+1]={0}, aucConvBuf[1024+1]={0}, ucFlag=0x00, ucByte=0x00;
+	int				iRet=0, iFd=0, iFileSize=0, iOffset=0, iFileLen=0, iBmpPixWidth=0, iBmpPixBitCount=0, iLogoOffset=0, iWidth=0;
+	BMP_FILE_HEADER stBmpFileHeader;
+	BMP_INFO_HEADER	stBmpInfoHeader;
+
+	unsigned long	lngDataSizePerLine=0;
+	int				iLcdLines=0, i=0, j=0, k=0;
+
+	iRet = PdkFile_Exist(pucFileName);
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppLog("[BmpConvert] PdkFile_Exist=%d, pucFileName=%s\n", iRet, pucFileName);
+#endif
+	if(iRet != PDK_RET_OK)
+	{
+		return -1;
+	}
+	
+	iFd = PdkFile_Open(pucFileName);
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppLog("[BmpConvert] PdkFile_Open=%d, pucFileName=%s\n", iFd, pucFileName);
+#endif
+	if(iFd < 0)
+	{
+		return -2;
+	}
+
+	memset(aucBmpBuff, 0, sizeof(aucBmpBuff));
+	//memset(aucBmpBuff, 0, sizeof(stBmpFileHeader));
+	iRet = PdkFile_Read(iFd, aucBmpBuff, sizeof(BMP_FILE_HEADER));
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppLog("[BmpConvert] PdkFile_Read=%d, BMP_FILE_HEADER\n", iRet);
+#endif
+	stBmpFileHeader.ulngFileSize =  ((int)aucBmpBuff [5]) * 16777216 +
+		((int)aucBmpBuff [4]) * 65536 +
+		((int)aucBmpBuff [3]) * 256  +
+		(int)aucBmpBuff [2];
+	stBmpFileHeader.ulngFileOffBits = ((int)aucBmpBuff [13]) * 16777216 +
+		((int)aucBmpBuff [12]) * 65536 +
+		((int)aucBmpBuff [11]) * 256  +
+		(int)aucBmpBuff [10];
+	
+	memset(aucBmpBuff, 0, sizeof(aucBmpBuff));
+	iRet = PdkFile_Read(iFd, aucBmpBuff+sizeof(BMP_FILE_HEADER), sizeof(BMP_INFO_HEADER));
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppLog("[BmpConvert] PdkFile_Read=%d, BMP_INFO_HEADER\n", iRet);
+#endif
+	memset(&stBmpInfoHeader, 0, sizeof(stBmpInfoHeader));
+	stBmpInfoHeader.ulngSize = ((int)aucBmpBuff [17]) * 16777216 +
+		((int)aucBmpBuff [16]) * 65536 +
+		((int)aucBmpBuff [15]) * 256  +
+		(int)aucBmpBuff [14];
+
+	stBmpInfoHeader.lngWidth = ((int)aucBmpBuff [21]) * 16777216 +
+		((int)aucBmpBuff [20]) * 65536 +
+		((int)aucBmpBuff [19]) * 256  +
+		(int)aucBmpBuff [18];
+
+	stBmpInfoHeader.lngHeight = ((int)aucBmpBuff [25]) * 16777216 +
+		((int)aucBmpBuff [24]) * 65536 +
+		((int)aucBmpBuff [23]) * 256  +
+		(int)aucBmpBuff [22];
+
+	stBmpInfoHeader.usPlanes = ((int)aucBmpBuff [27]) * 256  + (int)aucBmpBuff [26];
+	stBmpInfoHeader.usBitCount = ((int)aucBmpBuff [29]) * 256  + (int)aucBmpBuff [28];
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppLog("[BmpConvert] stBmpFileHeader.ulngFileSize=%d, stBmpFileHeader.ulngFileOffBits=%d\n", stBmpFileHeader.ulngFileSize, stBmpFileHeader.ulngFileOffBits);
+	AppLog("[BmpConvert] stBmpInfoHeader.ulngSize=%d, stBmpInfoHeader.lngWidth=%d, stBmpInfoHeader.lngHeight=%d\n", stBmpInfoHeader.ulngSize, stBmpInfoHeader.lngWidth, stBmpInfoHeader.lngHeight);
+#endif
+
+	if(stBmpInfoHeader.usBitCount != 1)
+	{
+#ifdef UI_BMP_LOGO_DEBUG_
+		AppLog("[BmpConvert] stBmpInfoHeader.usBitCount != 1\n");
+#endif
+		PdkFile_Close(iFd);
+		return -3;
+	}
+
+	if(stBmpInfoHeader.lngWidth > 500)
+	{
+#ifdef UI_BMP_LOGO_DEBUG_
+		AppLog("[BmpConvert] stBmpInfoHeader.lngWidth > 500\n");
+#endif
+		PdkFile_Close(iFd);
+		return -3;
+	}
+	iWidth = stBmpInfoHeader.lngWidth;
+
+	memset(aucConvBuf, 0, sizeof(aucConvBuf));
+	iRet = PdkFile_Read(iFd, aucConvBuf, 8);
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppLog("[BmpConvert] PdkFile_Read=%d\n", iRet);
+	AppHexLog("[BmpConvert] aucBuf: ", aucConvBuf, 8);
+#endif
+	if ((aucConvBuf[0] == 0xFF)
+			&&(aucConvBuf[1] == 0xFF)
+			&&(aucConvBuf[2] == 0xFF))
+	{
+		ucFlag = 0x01;
+	}
+	else if((aucConvBuf[0] == 0x00)
+		&&(aucConvBuf[1] == 0x00)
+		&&(aucConvBuf[2] == 0x00))
+	{
+		ucFlag = 0x00;
+	}
+
+	ucByte = stBmpInfoHeader.lngWidth%8;
+	if(ucByte == 0)
+	{
+		ucByte = 0x00;
+	}
+	else
+	{
+		ucByte = 2^(stBmpInfoHeader.lngWidth/8);
+	}
+
+	lngDataSizePerLine= (stBmpInfoHeader.lngWidth * stBmpInfoHeader.usBitCount + 31)/8; //Ò»¸öÉ¨ÃèÐÐËùÕ¼µÄ×Ö½ÚÊý
+	lngDataSizePerLine= lngDataSizePerLine/4*4; 			// ×Ö½ÚÊý±ØÐëÊÇ4µÄ±¶Êý
+		
+	iLcdLines = stBmpInfoHeader.lngHeight/8;
+	if (stBmpInfoHeader.lngHeight != (iLcdLines*8))
+	{
+		iLcdLines ++;
+	}
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppLog("[BmpConvert] iLcdLines * 8 * stBmpInfoHeader.lngWidth=%d\n", iLcdLines * stBmpInfoHeader.lngWidth);	
+#endif
+	memset(aucConvBuf, 0xff, iLcdLines * stBmpInfoHeader.lngWidth);
+	for(i=stBmpInfoHeader.lngHeight - 1, j=0; i>=0; i--,j++)
+	{
+		iRet = PdkFile_Seek(iFd, stBmpFileHeader.ulngFileOffBits + i*lngDataSizePerLine, SEEK_SET);
+		if(iRet < 0)
+		{
+#ifdef UI_BMP_LOGO_DEBUG_
+			AppLog("[BmpConvert] PdkFile_Seek=%d\n", iRet);
+#endif
+			PdkFile_Close(iFd);
+			return -3;
+		}
+
+		memset(aucBmpBuff, 0, sizeof(aucBmpBuff));
+		iRet = PdkFile_Read(iFd, aucBmpBuff, lngDataSizePerLine);
+#ifdef UI_BMP_LOGO_DEBUG_
+		//AppLog("[BmpConvert] PdkFile_Read=%d, lngDataSizePerLine=%d, i=%d, j=%d\n", iRet, lngDataSizePerLine, i, j);
+#endif
+		if(ucFlag == 0x01)
+		{
+			for (k = 0; k < lngDataSizePerLine; k++)
+			{
+#ifdef UI_BMP_LOGO_DEBUG_
+//				AppLog("[BmpConvert] j*lngDataSizePerLine + k=%d\n", (j*lngDataSizePerLine + k));
+#endif
+				if (k < stBmpInfoHeader.lngWidth/8)
+				{						
+					aucConvBuf[j*lngDataSizePerLine + k] = ~(aucBmpBuff[k]);
+				}
+				else if(k = stBmpInfoHeader.lngWidth/8)
+				{						
+					aucConvBuf[j*lngDataSizePerLine+k] = ~( aucBmpBuff[k] | 0xFF - ucByte);
+				}
+				else
+				{
+					aucConvBuf[j*lngDataSizePerLine+k] = 0x00;						
+				}
+			}
+		}
+		else
+		{
+			memcpy(aucConvBuf+j*lngDataSizePerLine, aucBmpBuff, lngDataSizePerLine);
+#ifdef UI_BMP_LOGO_DEBUG_
+			AppLog("[BmpConvert] j*lngDataSizePerLine=%d, lngDataSizePerLine=%d\n", j*lngDataSizePerLine, lngDataSizePerLine);
+#endif
+
+		}
+	}
+	PdkFile_Close(iFd);
+
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppLog("[BmpConvert] ConvBmp size: %d, stBmpInfoHeader.lngWidth=%ld, iWidth=%d\n", j*lngDataSizePerLine, stBmpInfoHeader.lngWidth, iWidth);
+#endif
+
+//	iWidth = stBmpInfoHeader.lngWidth;
+	memset(pucConvBmp, 0x00, uiConvBmpSize);
+	pucConvBmp[iLogoOffset] = iLcdLines;
+	iLogoOffset += 1;
+	for(i=0; i<iLcdLines; i++)
+	{
+		pucConvBmp[iLogoOffset] = iWidth/256;
+		pucConvBmp[iLogoOffset+1] = iWidth%256;
+#ifdef UI_BMP_LOGO_DEBUG_
+		AppLog("[BmpConvert] pucConvBmp[%d]=%02x, pucConvBmp[%d]=%02x, iLogoOffset=%d\n", iLogoOffset, pucConvBmp[iLogoOffset], iLogoOffset+1, pucConvBmp[iLogoOffset+1], iLogoOffset);
+#endif
+		iLogoOffset += 2;
+
+		for(j=0, k=0; j<(int)lngDataSizePerLine; j++)
+		{
+			int m=0, n=0;		
+			for(m=7; m>=0; m--)
+			{
+				unsigned char ucLogo=0x00;
+				ucLogo = 0x00;
+				for(n=0; n<8; n++)
+				{
+					unsigned char ucTemp=0x00;
+					ucTemp= *(aucConvBuf+i*lngDataSizePerLine*8+lngDataSizePerLine*n+j);
+					ucTemp = (ucTemp>>m)&0x01;
+					if (ucTemp == 0x00)
+						ucLogo |= 0x01 << n;
+				}
+					
+				k++;
+					
+				pucConvBmp[iLogoOffset] = ucLogo;
+#ifdef UI_BMP_LOGO_DEBUG_
+				AppLog("[BmpConvert] pucConvBmp[%d]=%02x, iLogoOffset=%d\n", iLogoOffset, pucConvBmp[iLogoOffset], iLogoOffset);
+#endif			
+				iLogoOffset += 1;		
+				if (k == (int)iWidth)
+				{
+					break;
+				}
+			}
+			if (k == (int)iWidth)
+				break;
+		}
+	}
+
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppLog("[BmpConvert] Convert successfully, Len=%d\n", iLogoOffset);
+	AppHexLog("[BmpConvert]Logo: ", pucConvBmp, iLogoOffset);
+	Lcdprintf("Conv success, len=%d\n", iLogoOffset);
+	getkey();
+#endif		
+	return 0;
+}
+
+
+
+// ===== Added end 2016-11-15==============================
+
+#define DATA_ERROR1  1
+#define DATA_ERROR2  2
+#define DATA_ERROR3  3
+#define DATA_ERROR4  4
+#define DATA_ERROR5  5
+
+int BmpToUiLogo(unsigned char *filename, unsigned char *ucTargetBuff)
+{
+	int iRet = 0;
+	int fp;
+	unsigned char *bmp = NULL;
+	int LineByte;
+	uint i=0, j= 0,k =0, m=0, n=0;
+	int iFileLen;
+	int iBmpPixWidth, iBmpPixHeight, iBfOffBits ,iBmpPixBitCount,iBmpByteSize, DataSizePerLine;
+	uchar temp[8] = {0};
+	unsigned char ucOff;
+	unsigned short usLeftIndent = 0;
+	int iCnt = 0;
+
+	uchar ucBmpBuff[1024] = {0};
+
+	uchar pMem[6144] = {0};
+	uchar sBuf[128] = {0};
+	uchar bLogo,bTemp, bFlag, b;
+	uchar ucLcdLines;
+	int iTartgetOffset = 0;
+
+	int iBmpPicWidthHigh, iBmpPicWidthLow;
+	
+	iRet = PdkFile_Exist(filename);
+#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo PdkFile_Exist= %d\n", iRet);
+#endif
+	if(iRet != 0)
+		return -2;
+
+	fp=PdkFile_Open(filename);
+	#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo PdkFile_Open= %d\n", fp);
+	#endif
+	if(fp < 0) {
+		return -1;
+	}
+
+	bmp = ucBmpBuff;
+	LineByte = PdkFile_GetSize(filename);
+	#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo PdkFile_GetSize = %d\n", LineByte);
+	#endif
+	if(LineByte < 0){
+		PdkFile_Close(fp);
+		return LineByte;
+	}
+	iRet = PdkFile_Read(fp, ucBmpBuff, LineByte);
+	#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo PdkFile_Read = %d\n", iRet);
+	#endif
+	if(iRet < 0){
+		PdkFile_Close(fp);
+		return iRet;
+	}
+	
+	if(!(bmp[0x00]=='B' && bmp[0x01]=='M')){
+		return  DATA_ERROR1;
+	}
+
+	iFileLen =  ((int)bmp [0x05])<<24 | ((int)bmp [0x04])<<16 | ((int)bmp [0x03])<<8 |((int)bmp [0x02]);
+	#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo  iFileLen = %d\n", iFileLen);
+	#endif
+
+	iBfOffBits = ((int)bmp [0x0b]) << 8 | ((int)bmp [0x0a]);
+	#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo  iBfOffBits = %d\n", iBfOffBits);
+	#endif
+	
+	iBmpPixWidth = ((int)bmp [0x15]) << 24 |((int)bmp [0x14]) << 16 | ((int)bmp [0x13]) << 8 | ((int)bmp [0x12]);
+	#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo  iBmpPixWidth = %d\n", iBmpPixWidth);
+	#endif
+	if(iBmpPixWidth > 128) {
+		return  DATA_ERROR4;
+	}
+
+	iBmpPixHeight = ((int)bmp [0x19]) << 24 |((int)bmp [0x18]) << 16 | ((int)bmp [0x17]) << 8 | ((int)bmp [0x16]);
+	#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo  iBmpPixHeight = %d\n", iBmpPixHeight);
+	#endif
+	if(iBmpPixHeight > 128) {
+		return  DATA_ERROR5;
+	}
+	
+	iBmpPixBitCount = ((int)bmp[0x1d]) << 8 | ((int)bmp[0x1c]);
+	#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo  iBmpPixBitCount = %d\n",iBmpPixBitCount);
+	#endif
+	if(iBmpPixBitCount != 1) {
+		return DATA_ERROR2;
+	}
+	
+	iBmpByteSize = ((int)bmp[0x25]) << 24 | ((int)bmp[0x24]) << 16 | ((int)bmp[0x23]) << 8 | ((int)bmp[0x22]);
+	#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo  iBmpByteSize = %d\n", iBmpByteSize);
+	#endif
+	if(iBmpByteSize > (128*48)) {
+		return DATA_ERROR3;
+	}
+
+	memcpy(temp, bmp + 54, 8);//bmpFileHeader,bmpInfoHeder,8bytes = 14 + 40 + 8 = 62bytes
+ 	if ((temp[0] == 0xFF)
+		&&(temp[1] == 0xFF)
+		&&(temp[2] == 0xFF))
+	{
+		bFlag = 1;//Â·Â´ÃÃ”
+	}
+	else if((temp[0] == 0x00)
+		&&(temp[1] == 0x00)
+		&&(temp[2] == 0x00))
+	{
+		bFlag = 0;//Ã•Ã½ÃÃ”
+	}
+
+	ucOff = iBmpPixWidth%8;
+	if ( 0 == ucOff )
+	{
+		b =0x00;
+	}
+	else
+	{
+		b = 2^(iBmpPixWidth/8);
+	}
+	DataSizePerLine= (iBmpPixWidth*iBmpPixBitCount+31)/8; //Ã’Â»Â¸Ã¶Ã‰Â¨ÃƒÃ¨ÃÃÃ‹Ã¹Ã•Â¼ÂµÃ„Ã—Ã–Â½ÃšÃŠÃ½
+	DataSizePerLine= DataSizePerLine/4*4; 			// Ã—Ã–Â½ÃšÃŠÃ½Â±Ã˜ÃÃ«ÃŠÃ‡4ÂµÃ„Â±Â¶ÃŠÃ½
+		
+	ucLcdLines = iBmpPixHeight/8;
+	if (iBmpPixHeight != (ucLcdLines*8)){
+		ucLcdLines ++;
+	}
+
+	memset(pMem, 0x00, ucLcdLines*8*iBmpPixWidth);
+
+#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo  iBmpPixWidth = %d\n", iBmpPixWidth);
+	ComDebugTx("BmpToUiLogo  iBmpPixHeight = %d\n", iBmpPixHeight);
+	ComDebugTx("BmpToUiLogo  ucLcdLines = %d\n", ucLcdLines);
+	ComDebugTx("BmpToUiLogo  DataSizePerLine = %d\n", DataSizePerLine);
+	ComDebugTx("BmpToUiLogo bFlag = %d\n", bFlag);
+	ComDebugTx("BmpToUiLogo  ucOff = %d\n", ucOff);
+#endif
+
+	for(i = iBmpPixHeight, j = 0;  i > 0;  i--, j++){
+		memcpy(sBuf, bmp+iBfOffBits + (i-1)*DataSizePerLine, DataSizePerLine);
+/*		iRet = PdkFile_Seek(fp, iBfOffBits + (i-1)*DataSizePerLine, SEEK_SET);
+		ComDebugTx("BmpToUiLogo i = %d\n", i);
+		ComDebugTx("BmpToUiLogo PdkFile_Seek = %d\n", iRet);
+		if(iRet < 0){
+			PdkFile_Close(fp);
+			return iRet;
+		}
+		iRet = PdkFile_Read(fp, sBuf, DataSizePerLine);
+		ComDebugTx("BmpToUiLogo PdkFile_Read = %d\n", iRet);
+		if(iRet < 0){
+			PdkFile_Close(fp);
+			return iRet;
+		}
+*/		
+		if(bFlag){
+			for (k = 0; k < DataSizePerLine; k++)
+			{
+				if (k < iBmpPixWidth/8)
+				{
+					pMem[j*DataSizePerLine+k] = ~(sBuf[k]);
+				}
+					else if(k == iBmpPixWidth/8)
+					{
+						pMem[j*DataSizePerLine+k] = ~( sBuf[k] | 0xFF - b);
+					}
+					else
+					{
+						pMem[j*DataSizePerLine+k] = 0x00;
+					}
+				}		
+
+		}
+		else{
+			memcpy(pMem+j*DataSizePerLine, sBuf, DataSizePerLine);
+		}
+#ifdef UI_BMP_LOGO_DEBUG_
+	AppHexLog("BmpToUiLogo sBuf : \n", sBuf, 128);
+#endif
+	}
+
+//	sprintf(ucTargetBuff+iTartgetOffset, "%02x", ucLcdLines);
+	memcpy(ucTargetBuff+iTartgetOffset, &ucLcdLines, 1);
+	iTartgetOffset++;
+#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo  make UI data...\n");
+	ComDebugTx("BmpToUiLogo  iBmpPixWidth/256 = %d, iBmpPixWidth%256 = %d\n", iBmpPixWidth/256, iBmpPixWidth%256);
+#endif
+	
+	iBmpPicWidthHigh = iBmpPixWidth/256;
+	iBmpPicWidthLow = iBmpPixWidth%256;
+	for(i=0; i< ucLcdLines; i++){
+//		sprintf(ucTargetBuff+iTartgetOffset, "%02x%02x", iBmpPixWidth/256, iBmpPixWidth%256);
+//		iTartgetOffset+=2;
+		memcpy(ucTargetBuff+iTartgetOffset, &iBmpPicWidthHigh, 1);
+		iTartgetOffset++;
+		memcpy(ucTargetBuff+iTartgetOffset, &iBmpPicWidthLow, 1);
+		iTartgetOffset++;
+		for(j=0, k=0; j<DataSizePerLine; j++){
+			for(m=7; m>=0; m--){
+				bLogo = 0x00;
+				for(n=0; n<8; n++){
+					bTemp= *(pMem+i*DataSizePerLine*8+DataSizePerLine*n+j);//?
+					bTemp = (bTemp>>m)&0x01;
+					if (bTemp == 0x00){
+						bLogo |= 0x01 << n;
+					}
+				}
+						
+				k++;//k record the Byte of one line
+						
+				if ((i==ucLcdLines-1)&&(k==(int)iBmpPixWidth)){
+				//	sprintf(ucTargetBuff + iTartgetOffset, "%02x", bLogo);
+					memcpy(ucTargetBuff + iTartgetOffset, &bLogo, 1);
+					iTartgetOffset++;
+					}
+				else{
+				//	sprintf(ucTargetBuff + iTartgetOffset, "%02x,", bLogo);
+					memcpy(ucTargetBuff + iTartgetOffset, &bLogo, 1);
+					iTartgetOffset++;
+					}
+					
+				if (k%16 == 0){
+				//	sprintf(ucTargetBuff+iTartgetOffset, "\r\n");
+				//	iTartgetOffset+=2;
+				}
+						
+				if (k == (int)iBmpPixWidth){
+				//	sprintf(ucTargetBuff+iTartgetOffset, "\r\n");
+				//	iTartgetOffset+=2;
+					break;
+				}	
+				
+			}
+			if (k == (int)iBmpPixWidth)
+				break;
+			}
+	}
+
+#ifdef UI_BMP_LOGO_DEBUG_
+	ComDebugTx("BmpToUiLogo ucTargetBuff[0] : %02x\n", ucTargetBuff[0]);
+	AppHexLog("BmpToUiLogo ucTargetBuff : \n", ucTargetBuff, 1);
+	AppHexLog("BmpToUiLogo ucTargetBuff : \n", ucTargetBuff, iBmpByteSize);
+#endif
+	return 0;
+}

@@ -1,0 +1,138 @@
+//============================================================================
+// Name        : ui.h
+// Author      :tuxq
+// Version     :
+// Copyright   : Your copyright notice
+// Description : Ansi-style
+//============================================================================
+#ifndef PRINTER_H
+#define PRINTER_H
+
+#include "posapi.h"
+
+#define UI_TIMER  4
+#define TRUE 	1
+#define FALSE 	0
+
+#define PAGENAME_LENGTH_MAX 32
+#define WIDGETNAME_LENGTH_MAX    32
+#define MENUITEM_LENGTH_MAX 32
+#define MSG_LENGTH_MAX		20
+
+#define CMD_INFO_TITLE                  "title"             //标题
+#define CMD_INFO_VALUE                  "value"           //当前值
+#define CMD_INFO_EDIT                  	"edit"
+#define CMD_INFO_PROMPT                 "prompt"            //显示的字符串
+#define CMD_INFO_LOGO				"logo"
+
+#define XML_HOME_SCREEN	"home_screen.xml"
+#define XML_PIN_INPUT		"input_pin.xml"
+#define XML_SELAPP_MENU	"selectapp_menu.xml"
+
+
+enum UI_RET										//scanner module		
+{
+	UI_ERR_BASE				=(2000),
+	EL_UI_RET_INVALID_WIDGETNAME	=(UI_ERR_BASE + 1),	//invalid parameter
+	UI_ERR_MSG_NULL			=(UI_ERR_BASE + 2),
+	UI_ERR_SET_ELEMENT_FAILED	=(UI_ERR_BASE + 3),
+	UI_ERR_TIME_OUT			=(UI_ERR_BASE + 4),	//time out
+};
+
+typedef enum{
+	TEXTBOX = 1,
+	PICTUREBOX,
+	INPUTBOX,
+	MENU,
+}ENUM_WIDGET_INDEX;
+
+typedef enum {
+	NAME = 10,
+	X,
+	Y,
+	VALUE,
+	FONTSIZE,
+	TEXTALIGN,
+	MODE,
+	KEYACCEPT,
+	MINLEN,
+	MAXLEN,
+}ENUM_WIDGET_ATTR;
+
+
+typedef enum{
+	ALIGN_LEFT = 20,
+	ALIGN_CENTER,
+	ALIGN_RIGHT,
+}ENUM_ALIGN_ATTR;
+
+typedef enum{
+	BUTTON_NONE = 30,
+	BUTTON_ENTER,
+	BUTTON_CANCEL,
+	BUTTON_ENTER_CANCEL,
+}ENUM_KEYACCEPT;
+
+typedef struct {
+	uchar name[32];
+	uchar x;
+	uchar y;
+	uchar value[32];
+	uchar fontsize;
+	uchar textalign;
+	uchar mode;
+	uchar keyaccept;
+}ST_TEXTBOX_WIDGET;
+
+typedef struct {
+	uchar name[32];
+	uchar x;
+	uchar y;
+	uchar value[768];
+}ST_PICTURE_WIDGET;
+
+typedef struct {
+	uchar name[32];
+	uchar x;
+	uchar y;
+	uchar value[32];
+	uchar fontsize;
+	uchar textalign;
+	uchar mode;
+	uchar keyaccept;//
+	uchar minlen;
+	uchar maxlen;
+}ST_INPUTBOX_WIDGET;
+
+typedef struct {
+	uchar name[32];
+	uchar x;
+	uchar y;
+	uchar value[32];
+	uchar fontsize;
+	uchar textalign;
+}ST_MENU_WIDGET;
+
+
+
+typedef struct _st_disp{
+	uchar ucWidgetName[16];
+	uchar ucText[32];
+}ST_DISP;
+
+typedef struct _st_picture{
+	uchar ucWidgetName[16];
+	uchar ucPicture[1024];
+}ST_PICTURE;
+
+
+int EShowMsgBox(const uchar *pucPageName,const uint uiMsgLength, const uchar  *pucMsg, const ushort usTimeout);
+int EShowInputBox(const uchar *pucPageName,const uint uiMsgLength, const uchar  *pucMsg, uchar *pucResponse, const ushort usTimeout);
+int EShowMenuList(const uchar *pucPageName,const uint uiMsgLength, const uchar  *pucMsg, uchar *pucResponse,const ushort usTimeout);
+
+int ShowMsgBox(const uchar * pucRequest);
+
+static int SetShowAlign(char * pszInfo, int iAlign, int iFontSize);
+static void SetCustomizedFont(int iFontType);
+static int SetElement(const uchar *buff, const uint uiMsgLength, const uchar *pucMsg, uchar *ucKeyAccept, uchar *ucResponse);
+#endif

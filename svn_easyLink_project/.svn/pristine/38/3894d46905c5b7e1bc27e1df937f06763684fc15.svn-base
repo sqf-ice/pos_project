@@ -1,0 +1,299 @@
+/*------------------------------------------------------------
+* FileName: transmain.c
+* Author: liukai
+* Date: 2016-08-15
+------------------------------------------------------------*/
+
+#include "..\inc\global.h"
+
+static void ProcResult(int iRet)
+{
+	//Display corresponding prompt on the terminal.
+	switch ( iRet ) {
+	case TRANS_ICC_RESET_ERR:
+		break;
+	case TRANS_ICC_CMD_ERR:
+		break;
+	case TRANS_ICC_BLOCK:
+		break;
+	case TRANS_EMV_RSP_ERR:
+		break;
+	case TRANS_EMV_APP_BLOCK:
+		break;
+	case TRANS_EMV_NO_APP:
+		break;
+	case TRANS_EMV_USER_CANCEL:
+		break;
+	case TRANS_EMV_TIME_OUT:
+		break;
+	case TRANS_EMV_DATA_ERR:
+		break;
+	case TRANS_EMV_NOT_ACCEPT:
+		break;
+	case TRANS_EMV_DENIAL:
+		break;
+	case TRANS_EMV_KEY_EXP:
+		break;
+	case TRANS_EMV_NO_PINPAD:
+		break;
+	case TRANS_EMV_NO_PASSWORD:
+		break;
+	case TRANS_EMV_SUM_ERR:
+		break;
+	case TRANS_EMV_NOT_FOUND:
+		break;
+	case TRANS_EMV_NO_DATA:
+		break;
+	case TRANS_EMV_OVERFLOW:
+		break;
+	case TRANS_NO_TRANS_LOG:
+		break;
+	case TRANS_RECORD_NOTEXIST:
+		break;
+	case TRANS_LOGITEM_NOTEXIST:
+		break;
+	case TRANS_ICC_RSP_6985:
+		break;
+	case TRANS_CLSS_USE_CONTACT:
+		break;
+	case TRANS_EMV_FILE_ERR:
+		break;
+	case TRANS_CLSS_TERMINATE:
+		break;
+	case TRANS_CLSS_FAILED:
+		break;
+	case TRANS_CLSS_DECLINE:
+		break;
+	case TRANS_CLSS_TRY_ANOTHER_CARD:
+		break;
+// TRANS_						(TRANS_BASE - 29)
+	case TRANS_PARAM_ERR:
+		break;
+	case TRANS_CLSS_WAVE2_OVERSEA:
+		break;
+	case TRANS_CLSS_WAVE2_TERMINATED:
+		break;
+	case TRANS_CLSS_WAVE2_US_CARD:
+		break;
+	case TRANS_CLSS_WAVE3_INS_CARD:
+		break;
+	case TRANS_CLSS_RESELECT_APP:
+		break;
+	case TRANS_CLSS_CARD_EXPIRED:
+		break;
+	case TRANS_EMV_NO_APP_PPSE_ERR:
+		break;
+	case TRANS_CLSS_USE_VSDC:
+		break;
+	case TRANS_CLSS_CVMDECLINE:
+		break;
+	case TRANS_CLSS_REFER_CONSUMER_DEVICE:
+		break;
+	case TRANS_CLSS_LAST_CMD_ERR:
+		break;
+	case TRANS_CLSS_API_ORDER_ERR:
+		break;
+	default:
+		break;
+	}
+}
+
+static int TransInit()
+{
+	int iRet=0;
+
+	MagOpen();
+
+	iRet = PiccOpen();
+	if ( iRet != 0 )
+	{
+		PiccClose();
+		return iRet;
+	}
+
+	return EMV_OK;
+}
+
+int ReadMagCardInfo(void)
+{
+	unsigned char ucRet=0;
+
+	g_tTransParam.ucCurrentTxnType[0] = TRANS_TYPE_MAGNETIC;
+	ucRet = MagRead(g_tTransParam.ucTrackOneData,g_tTransParam.ucTrackTwoData, g_tTransParam.ucTrackThreeData);
+	if ( !ucRet ) {
+		ScrCls();
+		PubDispString("READ CARD ERR", 0|DISP_LINE_LEFT);
+		getkey();
+		return ucRet;
+	}
+#ifdef DEBUG_
+	AppLog("TrackOneData = %s\n", g_tTransParam.ucTrackOneData);
+	AppLog("TrackTwoData = %s\n", g_tTransParam.ucTrackTwoData);
+	AppLog("TrackThreeData = %s\n", g_tTransParam.ucTrackThreeData);
+#endif
+	
+	return EMV_OK;
+}
+
+// Check service code in track 2, whther it is 2 or 6
+unsigned char IsChipCard(const uchar *pszTrack2)
+{
+	char *pszSeperator=NULL;
+
+	if( *pszTrack2==0 )
+	{
+		return FALSE;
+	}
+
+	pszSeperator = strchr((char *)pszTrack2, '=');
+	if( pszSeperator==NULL )
+	{
+		return FALSE;
+	}
+	if( (pszSeperator[5]=='2') || (pszSeperator[5]=='6') )
+	{
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+//Magnetic stripe card process.
+static int MagCardStartTransaction(void)
+{
+	int iRet=0;
+
+	g_tTransParam.ucCurrentTxnType[0] = TRANS_TYPE_MAGNETIC;
+	
+	iRet = ReadMagCardInfo();
+	if ( iRet != 0 ) {
+		return iRet;
+	}
+	
+	if ( g_ucIsFallBack == TRUE ) {
+		if ( IsChipCard(g_tTransParam.ucTrackTwoData) ) {
+			g_tTransParam.ucCurrentTxnType[0] = TRANS_TYPE_FALLBACK_MAGNETIC;
+			return EMV_OK;
+		} else {
+			ScrCls();
+			PubDispString("RESWIPE CARD", 0|DISP_LINE_LEFT);
+			getkey();
+			return -1;
+		}
+	} else if ( IsChipCard(g_tTransParam.ucTrackTwoData) ) {
+		ScrCls();
+		PubDispString("PLZ INSERT CARD", 0|DISP_LINE_LEFT);
+		getkey();
+		return -1;
+	} else {
+		return EMV_OK;
+	}
+
+	return EMV_OK;
+}
+
+int StartTransaction(void)
+{
+	int iRet=0;
+	unsigned char ucTemp[48]={0};
+	unsigned char szTotalAmt[12+1]={0};
+
+	iRet = TransInit();
+	if ( iRet ) {
+		return iRet;
+	}
+
+#ifdef EUI_
+	//TODO Display prompt here, show card prompt	
+#else
+	PubDispString("INSERT/SWIPE/TAP", 0|DISP_LINE_LEFT);
+	PubDispString("CARD", 2|DISP_LINE_CENTER);
+#endif
+	
+	memset(ucTemp, 0, sizeof(ucTemp));
+	memset(szTotalAmt, 0, sizeof(szTotalAmt));
+/*
+	sprintf((char *)szTotalAmt, "%l", sg_tClssTransParam.ulAmntAuth);
+	PubConvAmount(glSysParam.stEdcInfo.stLocalCurrency.szName, szTotalAmt,
+				glProcInfo.stTranLog.stTranCurrency.ucDecimal,
+				glProcInfo.stTranLog.stTranCurrency.ucIgnoreDigit,
+				ucTemp, 0);
+*/	
+	//for test 
+	g_tAppParam.ucFallbackAllowFlag[0] = APPPARAM_FALLBACK_ALLOW;
+
+	// Added by ZhangYuan 2016-10-13 add timer for StartTransaction
+	TimerSet(TIMER_TRANS, 550);
+	// Added end
+
+	while( 1 ) {
+		//detect swipe card
+		if ( 0 == MagSwiped() ) {
+			iRet = MagCardStartTransaction();
+			break;
+		}
+
+		//detect insert card
+		if ( 0 == IccDetect(0) ) {
+			iRet = EMVStartTransaction();
+			if ( iRet == EL_EMV_RET_FALLBACK ) {
+				ScrCls();
+				PubDispString("PLS SWIPT CARD", 0|DISP_LINE_LEFT);
+//				getkey();		// commented out by ZhangYuan 2016-10-14 detect mag swipe after fallback swipe prompt
+				continue;
+			}
+			break;
+		}
+
+		//detect tap card
+		if ( 0 == PiccDetect(0, NULL, NULL, NULL, NULL) ) {
+#ifndef _WIN32
+			iRet = ClssStartTransaction();
+#endif
+			break;
+		}
+
+		//detect key input
+		if ( 0 == kbhit() ) {
+			if ( KEYCANCEL == getkey() ) {
+				iRet = TRANS_EMV_USER_CANCEL;
+				break;
+			}
+		}
+
+		// ==== Added by ZhangYuan 2016-10-13 add timer check, if timeout, return
+		if( TimerCheck(TIMER_TRANS) == 0x00)
+		{
+			iRet = TRANS_EMV_TIME_OUT;	// the return code is to be determined
+			break;
+		}
+		// === Added end ============================================
+	}
+
+	//return code process
+	ProcResult(iRet);
+
+	if ( iRet ) {
+		return iRet;
+	}
+
+	return EMV_OK;
+}
+
+
+int CompleteTransaction(void)
+{
+	int iRet=0;
+
+	if ( g_tTransParam.ucCurrentTxnType[0] == TRANS_TYPE_CONTACTLESS ) {
+#ifndef _WIN32
+		iRet = ClssCompleteTrans();
+#endif
+	} else if ( g_tTransParam.ucCurrentTxnType[0] == TRANS_TYPE_EMV_CONTACT ) {
+		iRet = EMVCompleteTransaction();
+	} else {
+		
+	}
+
+	return EMV_OK;
+}

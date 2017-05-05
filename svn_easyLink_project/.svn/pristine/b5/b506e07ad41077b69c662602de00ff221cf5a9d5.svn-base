@@ -1,0 +1,782 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date:2016/09/21    
+ * Module Auth:huangwp     
+ * Description:UI xml file operarte module
+
+ *      
+ * ============================================================================
+ */
+
+#include "..\inc\global.h"
+
+UI_PARSE_FUNC pUiParseAttrFunTable[]=
+{
+
+	{TEXTBOX, ParseTextBox},
+	{PICTUREBOX, ParsePictureBox},
+	{INPUTBOX, ParseInputBox},
+	{MENUITEM, ParseMenu},		
+};
+
+int ParseTextBox(const uchar *pucXmlOneLine, uchar *pucOutData, int iOffset)
+{
+    int iRet = 0;
+	ST_TEXTBOX_WIDGET st_TextBoxData = {0};
+	uchar pucBuf[UI_ATTR_VALUE_LEN] = {0};
+
+	pucOutData[iOffset] = TEXTBOX;
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_NAME, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(st_TextBoxData.name, pucBuf, sizeof(st_TextBoxData.name));
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_X, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_TextBoxData.x = (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_Y, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_TextBoxData.y = (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_VALUE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(st_TextBoxData.value, pucBuf, sizeof(st_TextBoxData.value));
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_FONTSIZE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_TextBoxData.fontsize= (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_TEXTALIGN, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_TextBoxData.textalign= (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_MODE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_TextBoxData.mode= (uchar)atoi(pucBuf);
+	//PubAsc2Bcd(pucBuf + 2, strlen((const char *)pucBuf) - 2, &(st_TextBoxData.mode));
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_KEYACCECPT, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_TextBoxData.keyaccept= (uchar)atoi(pucBuf);
+
+	#ifdef UI_XML_FILE_OP_DEBUG
+	ComDebugTx("PaseTextBox---- st_TextBoxData.name = %s \n", st_TextBoxData.name);
+	ComDebugTx("PaseTextBox---- st_TextBoxData.x = %d \n", st_TextBoxData.x);
+	ComDebugTx("PaseTextBox---- st_TextBoxData.y = %d \n", st_TextBoxData.y);
+	ComDebugTx("PaseTextBox---- st_TextBoxData.value = %s \n", st_TextBoxData.value);
+	ComDebugTx("PaseTextBox---- st_TextBoxData.fontsize = %d \n", st_TextBoxData.fontsize);
+	ComDebugTx("PaseTextBox---- st_TextBoxData.textalign = %d \n", st_TextBoxData.textalign);
+	ComDebugTx("PaseTextBox---- st_TextBoxData.mode = %d \n", st_TextBoxData.mode);
+	ComDebugTx("PaseTextBox---- st_TextBoxData.keyaccept = %d \n", st_TextBoxData.keyaccept);
+	ComDebugTx("PaseTextBox---- iOffset = %d \n", iOffset);
+	ComDebugTx("PaseTextBox---- sizeof(st_TextBoxData) = %d \n", sizeof(st_TextBoxData));
+	#endif
+	memcpy(pucOutData + iOffset + 1,&st_TextBoxData, sizeof(st_TextBoxData));
+	
+	#ifdef UI_XML_FILE_OP_DEBUG
+	AppHexLog("[PaseTextBox]  pucOutData: ", pucOutData + iOffset, sizeof(st_TextBoxData)+1);
+	#endif
+
+	return (sizeof(st_TextBoxData) + sizeof(uchar));
+	//return UI_XML_FILE_OP_OK;
+}
+	
+int ParseInputBox(const uchar *pucXmlOneLine, uchar *pucOutData, int iOffset)
+{
+    int iRet = 0;
+	uchar pucBuf[UI_ATTR_VALUE_LEN] = {0};
+
+   	ST_INPUTBOX_WIDGET st_InputBoxData = {0};
+
+	pucOutData[iOffset] = INPUTBOX;
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_NAME, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(st_InputBoxData.name, pucBuf, sizeof(st_InputBoxData.name));
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_X, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_InputBoxData.x = (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_Y, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_InputBoxData.y = (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_VALUE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(st_InputBoxData.value, pucBuf, sizeof(st_InputBoxData.value));
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_FONTSIZE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_InputBoxData.fontsize= (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_TEXTALIGN, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_InputBoxData.textalign= (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_MODE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_InputBoxData.mode= (uchar)atoi(pucBuf);
+	//PubAsc2Bcd(pucBuf + 2, strlen((const char *)pucBuf) - 2, &(st_InputBoxData.mode));
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_TYPE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_InputBoxData.type= (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_KEYACCECPT, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_InputBoxData.keyaccept= (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_MINLEN, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_InputBoxData.minlen= (uchar)atoi(pucBuf);
+
+	
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_MAXLEN, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_InputBoxData.maxlen= (uchar)atoi(pucBuf);
+
+
+	#ifdef UI_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseInputBox---- st_InputBoxData.name = %s \n", st_InputBoxData.name);
+	ComDebugTx("ParseInputBox---- st_InputBoxData.x = %d \n", st_InputBoxData.x);
+	ComDebugTx("ParseInputBox---- st_InputBoxData.y = %d \n", st_InputBoxData.y);
+	ComDebugTx("ParseInputBox---- st_InputBoxData.value = %s \n", st_InputBoxData.value);
+	ComDebugTx("ParseInputBox---- st_InputBoxData.fontsize = %d \n", st_InputBoxData.fontsize);
+	ComDebugTx("ParseInputBox---- st_InputBoxData.textalign = %d \n", st_InputBoxData.textalign);
+	ComDebugTx("ParseInputBox---- st_InputBoxData.mode = %d \n", st_InputBoxData.mode);
+	ComDebugTx("ParseInputBox---- st_InputBoxData.type = %d \n", st_InputBoxData.type);
+	ComDebugTx("ParseInputBox---- st_InputBoxData.keyaccept = %d \n", st_InputBoxData.keyaccept);	
+	ComDebugTx("ParseInputBox---- st_InputBoxData.minlen = %d \n", st_InputBoxData.minlen);
+	ComDebugTx("ParseInputBox---- st_InputBoxData.maxlen = %d \n", st_InputBoxData.maxlen);
+	ComDebugTx("ParseInputBox---- iOffset = %d \n", iOffset);
+	ComDebugTx("ParseInputBox---- sizeof(st_InputBoxData) = %d \n", sizeof(st_InputBoxData));
+	#endif
+	memcpy(pucOutData + iOffset + 1,&st_InputBoxData, sizeof(st_InputBoxData));
+
+	#ifdef UI_XML_FILE_OP_DEBUG
+	AppHexLog("[ParseInputBox]  pucOutData: ", pucOutData + iOffset, sizeof(st_InputBoxData)+1);
+	#endif
+
+	//return UI_XML_FILE_OP_OK;
+	return (sizeof(st_InputBoxData) + sizeof(uchar));
+}
+
+int ParsePictureBox(const uchar *pucXmlOneLine, uchar *pucOutData, int iOffset)
+{
+
+    int iRet = 0;
+	uchar pucBuf[UI_PICTURE_BOX_VALUE_LEN] = {0};
+
+	ST_PICTURE_WIDGET st_PictureBoxData = {0};
+
+	pucOutData[iOffset] = PICTUREBOX;
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_NAME, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(st_PictureBoxData.name, pucBuf, sizeof(st_PictureBoxData.name));
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_X, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_PictureBoxData.x = (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_Y, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_PictureBoxData.y = (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_VALUE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(st_PictureBoxData.value, pucBuf, sizeof(st_PictureBoxData.value));
+
+	#ifdef UI_XML_FILE_OP_DEBUG
+	ComDebugTx("PasePictureBox---- st_PictureBoxData.name = %s \n", st_PictureBoxData.name);
+	ComDebugTx("PasePictureBox---- st_PictureBoxData.x = %d \n", st_PictureBoxData.x);
+	ComDebugTx("PasePictureBox---- st_PictureBoxData.y = %d \n", st_PictureBoxData.y);
+	ComDebugTx("PasePictureBox---- st_PictureBoxData.value = %s \n", st_PictureBoxData.value);
+	ComDebugTx("PasePictureBox---- iOffset = %d \n", iOffset);
+	ComDebugTx("PasePictureBox---- sizeof(PasePictureBox) = %d \n", sizeof(st_PictureBoxData));
+	#endif
+	memcpy(pucOutData + iOffset + 1,&st_PictureBoxData, sizeof(st_PictureBoxData));
+
+	#ifdef UI_XML_FILE_OP_DEBUG
+	AppHexLog("[PasePictureBox]  pucOutData: ", pucOutData + iOffset, sizeof(st_PictureBoxData)+1);
+	#endif
+	
+	return (sizeof(ST_PICTURE_WIDGET) + sizeof(uchar));
+	 
+}
+
+int ParseMenu(const uchar *pucXmlOneLine, uchar *pucOutData, int iOffset)
+{
+    int iRet = 0;
+	uchar pucBuf[UI_ATTR_VALUE_LEN] = {0};
+	ST_MENU_WIDGET st_MenuData = {0};
+
+	pucOutData[iOffset] = MENUITEM;
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_NAME, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(st_MenuData.name, pucBuf, sizeof(st_MenuData.name));
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_X, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_MenuData.x = (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_Y, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_MenuData.y = (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_VALUE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(st_MenuData.value, pucBuf, sizeof(st_MenuData.value));
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_FONTSIZE, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_MenuData.fontsize= (uchar)atoi(pucBuf);
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetAttrValue(pucXmlOneLine, UI_PAGE_ATTRA_TEXTALIGN, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	st_MenuData.textalign= (uchar)atoi(pucBuf);
+
+	#ifdef UI_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseMenu---- st_MenuData.name = %s \n", st_MenuData.name);
+	ComDebugTx("ParseMenu---- st_MenuData.x = %d \n", st_MenuData.x);
+	ComDebugTx("ParseMenu---- st_MenuData.y = %d \n", st_MenuData.y);
+	ComDebugTx("ParseMenu---- st_MenuData.value = %s \n", st_MenuData.value);
+	ComDebugTx("ParseMenu---- st_MenuData.fontsize = %d \n", st_MenuData.fontsize);
+	ComDebugTx("ParseMenu---- st_MenuData.textalign = %d \n", st_MenuData.textalign);
+	ComDebugTx("ParseMenu---- iOffset = %d \n", iOffset);
+	ComDebugTx("ParseMenu---- sizeof(st_MenuData) = %d \n", sizeof(st_MenuData));
+	#endif
+	
+	memcpy(pucOutData + iOffset + 1,&st_MenuData, sizeof(st_MenuData));
+
+    #ifdef UI_XML_FILE_OP_DEBUG
+	AppHexLog("[ParseMenu]  pucOutData: ", pucOutData + iOffset, sizeof(st_MenuData)+1);
+	#endif
+
+	return (sizeof(ST_MENU_WIDGET) + sizeof(uchar));
+
+}
+
+
+static int GetUiBoxType(uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return UI_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, UI_TEXT_BOX) != NULL)
+	{
+		return TEXTBOX;
+	}
+	if(strstr(pucXmlOneLine, UI_PICTURE_BOX) != NULL)
+	{
+		return PICTUREBOX;
+	}
+	if(strstr(pucXmlOneLine, UI_INPUT_BOX) != NULL)
+	{
+		return INPUTBOX;
+	}
+	if(strstr(pucXmlOneLine, UI_MENU_ITEM_BOX) != NULL)
+	{
+		return MENUITEM;
+	}
+	else
+	{
+		return UI_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+}
+
+static int ParseUiAttr(uchar *pucXmlOneLine, uchar *pucOutData, int iOffset)
+{
+    int iUiBoxType = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return UI_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iUiBoxType = GetUiBoxType(pucXmlOneLine);
+	iSize = sizeof(pUiParseAttrFunTable);
+	
+	#ifdef UI_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseUiAttr---- GetUiBoxType = %d iSize = %d\n", iUiBoxType, iSize);
+	#endif
+	
+	if(iUiBoxType < 0)
+	{
+		return UI_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	for(i = 0; i < iSize; i++)
+	{
+	    if(pUiParseAttrFunTable[i].iType == iUiBoxType)
+	    {
+			iRet  = pUiParseAttrFunTable[i].vFunc(pucXmlOneLine, pucOutData, iOffset);
+			if(iRet < 0)
+			{
+			    #ifdef UI_XML_FILE_OP_DEBUG
+				ComDebugTx("ParseUiAttr---- pUiParseAttrFunTable iRet = %d i = %d\n", iRet, i);
+				#endif
+				return iRet;
+			}
+	   	}
+	}
+
+	return iRet;
+}
+
+static int FindPagePositonInFile(const uchar *pucFileName, const uchar *pucPageName, int iPos)
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iSearchLen = 0;
+	uchar ucReadBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar ucTempBuf[EMV_TEMP_BUF_LEN + 1] = {0};
+	uchar ucParseBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar *pucStart  = NULL;
+	uchar *pucLastEnterPos = NULL;
+	int iRet = 0;
+	int iOffset = 0;
+	ulong uiPosition = 0;
+	int iLseek = 0;
+
+	
+	iRet = PdkFile_Exist (pucFileName);
+	if(iRet < 0)
+	{
+		ComDebugTx("Ui FindNodePositonInFile PdkFile_Exist iRet = %d\n", iRet);
+		return iRet;
+	}
+
+	iFd = PdkFile_Open(pucFileName);
+	if(iFd < 0)
+	{
+		ComDebugTx("FindNodePositonInFile PdkFile_Open iFd = %d\n", iFd);
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(pucFileName);
+	#ifdef UI_XML_FILE_OP_DEBUG
+	ComDebugTx("FindNodePositonInFile PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef UI_XML_FILE_OP_DEBUG
+		ComDebugTx("FindNodePositonInFile PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		#endif
+		return iFileSize;
+	}
+
+	iLseek = PdkFile_Seek (iFd, iPos, SEEK_CUR);
+	//ComDebugTx("FindNodePositonInFile PdkFile_Seek iPos PdkFile_Seek = %d\n", iLseek);
+	if(iLseek < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef UI_XML_FILE_OP_DEBUG
+		ComDebugTx("FindNodePositonInFile PdkFile_Seek PdkFile_Seek = %d\n", iLseek);
+		#endif
+		return iLseek;
+	}
+
+	while(iSearchLen < iFileSize)
+	{
+		memset(ucReadBuf, 0, sizeof(ucReadBuf));
+		iRet = PdkFile_Read(iFd, ucReadBuf, 1024);
+		//ComDebugTx("FindNodePositonInFile PdkFile_Read ucReadBuf = %s\n", ucReadBuf);
+		//ComDebugTx("FindNodePositonInFile PdkFile_Read iRet = %d\n", iRet);
+		if(iRet < 0)
+		{
+			PdkFile_Close(iFd);
+			ComDebugTx("FindNodePositonInFile PdkFile_Read iRet = %d\n", iRet);
+			return iRet;
+		}
+
+		//every time ,we should confirm the last line is whole line
+		pucLastEnterPos = strrchr(ucReadBuf,'\x0a');
+		if(pucLastEnterPos == NULL)
+		{
+			PdkFile_Close(iFd);
+			return EMV_XML_FILE_OP_ERR_ONELINE_OVER_1024;
+		}
+		
+		memcpy(ucParseBuf, ucReadBuf, pucLastEnterPos - ucReadBuf);
+		#ifdef UI_XML_FILE_OP_DEBUG
+		ComDebugTx("FindNodePositonInFile memcpy ucParseBuf = %s\n", ucParseBuf);
+		ComDebugTx("FindNodePositonInFile memcpy pucNodeName = %s\n", pucPageName);
+		#endif
+		
+		pucStart = strstr(ucParseBuf, pucPageName);
+		if(pucStart == NULL)
+		{
+		    //the len have search
+			iOffset = 1024 - (pucLastEnterPos - ucReadBuf);
+			//ComDebugTx("FindNodePositonInFile 1024 - (pucLastEnterPos - ucReadBuf) = %d\n", iOffset);
+			iSearchLen = iSearchLen + (pucLastEnterPos - ucReadBuf);
+			//ComDebugTx("FindNodePositonInFile pucstart = NULL iSearchLen = %d\n", iSearchLen);
+			iLseek = PdkFile_Seek(iFd, -iOffset, SEEK_CUR);
+			if(iLseek < 0)
+			{
+				PdkFile_Close(iFd);
+				ComDebugTx("FindNodePositonInFile PdkFile_Seek -iOffsetPdkFile_Seek = %d\n", iLseek);
+				return iLseek;
+			}
+			continue;
+		}
+		else
+		{
+			//ComDebugTx("FindNodePositonInFile pucstart !=NULl iSearchLen = %d\n", iSearchLen);
+			//ComDebugTx("FindNodePositonInFile pucstart !=NULl (pucStart - ucParseBuf) = %d\n", (pucStart - ucParseBuf));
+			uiPosition = iSearchLen + (pucStart - ucParseBuf);
+			//ComDebugTx("FindNodePositonInFile pucstart !=NULl uiPosition = %d\n", uiPosition);
+			PdkFile_Close(iFd);
+			return uiPosition;
+		}
+	}
+	PdkFile_Close(iFd);
+	return EMV_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+}
+
+int ParseUi(const uchar *pucPageName, uchar *pucOutData, int iOutBufSize)
+{
+	int iRet = 0;
+	int iListPos = 0;
+	int iFd = 0;
+	int iFileSize = 0;
+	int iLseek = 0;
+	uchar aucReadBuf[UI_READ_BUF_SIZE + 1] = {0};
+	uchar aucParseBuf[UI_READ_BUF_SIZE + 1] = {0};
+	uchar aucXmlLineBuf[UI_READ_BUF_SIZE] = {0};
+	uchar ucPageParentNodeLine[UI_XML_FILE_LINE_BUF_SIZE] = {0};
+	uchar *pucLastEnterPos = NULL;
+	uchar *pucEndTag = NULL;
+	int iLen = 0;
+	int iHaveGetLen = 0;
+	int iOffset = 0;
+	int iReadLen = 0;
+	int iHavaParseLen = 0;
+
+	if(pucPageName != NULL)
+	{
+		strcat(ucPageParentNodeLine, UI_PAGE_ROOT_NODE_NAME);
+		strcat(ucPageParentNodeLine, "\"");
+		strcat(ucPageParentNodeLine, pucPageName);
+		strcat(ucPageParentNodeLine, "\">");
+		#ifdef UI_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseUi---- ucPageParentNodeLine = %s \n", ucPageParentNodeLine);
+		#endif
+		
+		iListPos = FindPagePositonInFile(UI_FILE_NAME, ucPageParentNodeLine, 0);
+		if(iListPos < 0)
+		{
+			ComDebugTx("ParseUi FindNodePositonInFile iListPos = %d\n", iListPos);
+			return iListPos;
+		}
+		#ifdef UI_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseUi FindNodePositonInFile != NULL iListPos = %d\n", iListPos);
+		#endif
+	}
+	else
+	{
+		ComDebugTx("ParseUi  pucPageName == UI_XML_FILE_OP_ERR_PAGE_IS_NULL\n");
+		return UI_XML_FILE_OP_ERR_PAGE_IS_NULL;	
+		
+	}
+	
+	iFd = PdkFile_Open(UI_FILE_NAME);
+	#ifdef UI_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseUi PdkFile_Open iFd = %d\n", iFd);
+	#endif
+	if(iFd < 0)
+	{
+		ComDebugTx("ParseUi PdkFile_Open iFd = %d\n", iFd);
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(UI_FILE_NAME);
+	#ifdef UI_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseUi PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("ParseUi PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = PdkFile_Seek (iFd, iListPos, SEEK_CUR);
+	#ifdef UI_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseUi PdkFile_Seek PdkFile_Seek = %d\n", iLseek);
+	#endif
+	if(iLseek < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("ParseUi PdkFile_Seek PdkFile_Seek = %d\n", iLseek);
+		return iFileSize;
+	}
+
+	while((iReadLen + iListPos) < iFileSize)
+	{
+		memset(aucReadBuf, 0, sizeof(aucReadBuf));
+		iRet = PdkFile_Read(iFd, aucReadBuf, 1024);
+		if(iRet < 0)
+		{
+			PdkFile_Close(iFd);
+			ComDebugTx("ParseUi PdkFile_Read iRet = %d\n", iRet);
+			return iRet;
+		}
+		iReadLen +=  iRet;
+		#ifdef UI_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseUi PdkFile_Read iReadLen = %d\n", iReadLen);
+		ComDebugTx("ParseUi PdkFile_Read ucReadBuf = %s\n", aucReadBuf);
+		#endif
+
+		//every time ,we should confirm the last line is whole line
+		pucLastEnterPos = strrchr(aucReadBuf,'\x0a');
+		if(pucLastEnterPos == NULL)
+		{
+			PdkFile_Close(iFd);
+			ComDebugTx("ParseUi pucLastEnterPos == NULL\n");
+			return EMV_XML_FILE_OP_ERR_ONELINE_OVER_1024;
+		}
+		#ifdef UI_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseUi pucLastEnterPos != NULL\n");
+		#endif
+		memset(aucParseBuf, 0, sizeof(aucParseBuf));
+		memcpy(aucParseBuf, aucReadBuf, pucLastEnterPos - aucReadBuf + 1);
+		#ifdef UI_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseUi  ucParseBuf = %s\n", aucParseBuf);
+		#endif
+			
+		while((iHaveGetLen) < (pucLastEnterPos - aucReadBuf + 1))
+		{
+			memset(aucXmlLineBuf, 0, sizeof(aucXmlLineBuf));
+			//offset mean hava get len,the parsebuf's data every line is whole line   include \r\n
+			#ifdef UI_XML_FILE_OP_DEBUG
+			ComDebugTx("ParseUi  XmlGetOneLineData iHaveGetLen = %d\n", iHaveGetLen);
+			#endif
+			iRet = XmlGetOneLineData(aucParseBuf + iHaveGetLen, &iLen, aucXmlLineBuf);
+			#ifdef UI_XML_FILE_OP_DEBUG
+			ComDebugTx("ParseUi  XmlGetOneLineData ucXmlLineBuf = %s\n", aucXmlLineBuf);
+			ComDebugTx("ParseUi  XmlGetOneLineData iLen = %d\n", iLen);
+			#endif
+
+			if(iRet < 0)
+			{
+				ComDebugTx("ParseUi XmlGetOneLineData iRet < 0 = %d\n", iRet);
+				PdkFile_Close (iFd);
+				return iRet;
+			}
+			iHaveGetLen += iLen;
+			#ifdef UI_XML_FILE_OP_DEBUG
+			ComDebugTx("ParseUi iHaveGetLen iHaveGetLen = %d\n", iHaveGetLen);
+			ComDebugTx("ParseUi iHaveGetLen (pucLastEnterPos - ucReadBuf) = %d\n", (pucLastEnterPos - aucReadBuf + 1));
+			#endif
+
+			//init the buf that use to save data
+			if(strstr(aucXmlLineBuf, ucPageParentNodeLine) != NULL)
+			{
+				#ifdef UI_XML_FILE_OP_DEBUG
+				ComDebugTx("ParseUi init buf \n");
+				#endif
+				memset(pucOutData , 0, iOutBufSize);
+				//continue;
+			}
+			
+			//ComDebugTx("ParseUi  pucListEnd pucListEnd = %s\n", pucListEnd);
+			pucEndTag = strstr(aucXmlLineBuf, "</Page>");
+			if(pucEndTag != NULL)
+			{
+				PdkFile_Close(iFd);
+				//ComDebugTx("ParseUi  pucListEndTag pucListEndTag = NULL\n");
+				return XML_PARSE_OK;
+			}
+
+			iRet = IsXmlLineHaveAttr(aucXmlLineBuf);
+			
+			#ifdef UI_XML_FILE_OP_DEBUG
+			ComDebugTx("ParseUi  IsXmlLineHaveAttr iRet = %d\n", iRet);
+			#endif
+			
+			if(iRet == XML_NODE_NO_ATTR)
+			{
+				continue;
+			}
+			else if(iRet == XML_NODE_END)
+			{
+				break;
+			}
+			else if(iRet == XML_NODE_HAVE_ATTR)
+			{
+			    iRet = ParseUiAttr(aucXmlLineBuf, pucOutData, iHavaParseLen);
+				if(iRet < 0)
+				{
+					PdkFile_Close (iFd);
+					return iRet;
+				}
+				iHavaParseLen = iRet + iHavaParseLen;
+
+				#ifdef UI_XML_FILE_OP_DEBUG
+				ComDebugTx("ParseUi iHavaParseLen = %d\n", iHavaParseLen);
+				ComDebugTx("ParseUi iHavaParseLen iRet = %d\n", iRet);
+				#endif
+				if(iHavaParseLen > iOutBufSize)
+				{
+					ComDebugTx("ParseUi iHavaParseLen UI_XML_FILE_OP_ERR_BUF_IS_FULL iRet = %d\n", iRet);
+					return UI_XML_FILE_OP_ERR_BUF_IS_FULL;
+				}
+			}		
+           
+
+			//have finish one parsebuf, reset data  //dui de wei zhi
+			if(iHaveGetLen == (pucLastEnterPos - aucReadBuf + 1))
+			{
+				iRet = PdkFile_Seek (iFd, iHaveGetLen - 1024, SEEK_CUR);
+				#ifdef UI_XML_FILE_OP_DEBUG
+				ComDebugTx("ParseUi PdkFile_Seek iHaveGetLen - 1024, SEEK_CUR = %d\n", iRet);
+				#endif
+				if(iRet < 0)
+				{
+					ComDebugTx("ParseUi PdkFile_Seek iHaveGetLen - 1024, SEEK_CUR = %d\n", iRet);
+					return iRet;
+				}
+				iHaveGetLen = 0;
+				break;
+			}
+		}
+		//parse one aid
+	}
+	PdkFile_Close(iFd);
+	return XML_PARSE_OK;
+}
+
+

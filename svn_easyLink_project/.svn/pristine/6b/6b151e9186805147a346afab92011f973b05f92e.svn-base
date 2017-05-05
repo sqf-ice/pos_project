@@ -1,0 +1,38 @@
+/*------------------------------------------------------------
+* FileName: global.c
+* Author: liukai
+* Date: 2016-08-10
+------------------------------------------------------------*/
+
+#include "..\inc\global.h"
+
+// === COMM ======================================================
+uchar g_ucCommPort = 0;
+int g_UsbOpenFlag = 0;
+int g_BtOpenFlag = 0;
+int g_ConnectFlag = 0;
+int ProtocolType = PROTOCOL_NORMAL_MODE;
+int g_IdeUi = 0;
+uchar g_pucErrMsg[ERR_MSG_OFFSET] = {0};
+uchar g_UiFileExist = 1;
+
+
+
+// === COMM END ==================================================
+
+// === FILE=======================================================
+
+FILE_INFO_T g_stFileInfo[MAX_FILE_CNT] = {0};
+
+// === FILE END ==================================================
+
+uchar g_ucIsFallBack;
+
+// ======== Remote Download Begin=========================
+
+unsigned char	g_ucRebootFlag = 0x00;
+
+// ======== Remote Download End ==========================
+
+
+

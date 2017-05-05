@@ -1,0 +1,463 @@
+//============================================================================
+// Name        : ui.c
+// Author      :tuxq
+// Version     :
+// Copyright   : Your copyright notice
+// Description : Ansi-style
+//============================================================================
+#include "../inc/global.h"
+
+int EShowMsgBox(const uchar *pucPageName, const uint uiMsgLength, const uchar  *pucMsg, const ushort usTimeout)
+{
+	int   iRet = 0;
+	uchar ucKeyAccept = BUTTON_NONE, ucKeyValue = 0;
+	uchar buff[1024]={0};
+
+	if(pucMsg == NULL){
+		ComDebugTx("pucMsg == NULL\n");
+		return UI_ERR_MSG_NULL;
+	}
+
+	iRet = ParseUi(pucPageName,buff);
+	if(iRet < 0){
+		ComDebugTx("EShowMsgBox ParseUi  iRet = %d\n", iRet);
+		return iRet;
+	}
+
+	if(usTimeout != 0 ){
+		TimerSet(UI_TIMER,usTimeout);
+	}
+	
+	iRet = SetElement(buff, uiMsgLength, pucMsg, &ucKeyAccept, NULL);
+	if(iRet != 0){
+		return UI_ERR_SET_ELEMENT_FAILED;
+	}
+
+	while(TimerCheck(UI_TIMER)){
+		switch(ucKeyAccept){
+			case BUTTON_NONE:
+				break;
+			case BUTTON_CANCEL:
+				if(!kbhit()){
+					ucKeyValue = getkey();
+				}
+				if(ucKeyValue == KEYCANCEL){
+					ScrCls();
+					ScrTextOut(0, 0, "user canceled!");
+					return RET_OK;
+				}
+				break;
+			case BUTTON_ENTER:
+				if(!kbhit()){
+					ucKeyValue = getkey();
+				}
+				if(ucKeyValue == KEYENTER){
+					ScrCls();
+					ScrTextOut(0, 0, "user confirmed!");
+					return RET_OK;
+				}
+				break;
+			case BUTTON_ENTER_CANCEL:
+				if(!kbhit()){
+					ucKeyValue = getkey();
+				}
+				if(ucKeyValue == KEYCANCEL){
+					ScrCls();
+					ScrTextOut(0, 0, "user canceled!");
+					return RET_OK;
+				}
+				if(ucKeyValue == KEYENTER){
+					ScrCls();
+					ScrTextOut(0, 0, "user confirmed!");
+					return RET_OK;
+				}
+				break;
+			default:
+				break;		
+		}
+	}
+	if(!TimerCheck(UI_TIMER)){
+		ScrCls();
+		ScrTextOut(0, 0, "timeout exit!");
+		return UI_ERR_TIME_OUT;
+	}
+	else
+		return RET_OK;
+}
+
+int EShowInputBox(const uchar *pucPageName,const uint uiMsgLength, const uchar  *pucMsg, uchar *pucResponse, const ushort usTimeout)
+{
+	int   iRet = 0; 
+	uchar  ucKeyAccept = BUTTON_NONE, ucKeyValue = 0;
+	
+	uchar buff[1024]={0};
+
+	if(pucMsg == NULL){
+		ComDebugTx("pucMsg == NULL\n");
+		return UI_ERR_MSG_NULL;
+	}
+	
+	iRet = ParseUi(pucPageName,buff);
+	if(iRet < 0){
+		ComDebugTx("EShowInputBox ParseUi  iRet = %d\n", iRet);
+		return iRet;
+	}
+
+	if(usTimeout != 0 ){
+		TimerSet(UI_TIMER,usTimeout);
+	}
+
+	iRet = SetElement(buff, uiMsgLength, pucMsg, &ucKeyAccept, pucResponse);
+	if(iRet != 0){
+		return UI_ERR_SET_ELEMENT_FAILED;
+	}
+
+	if(TimerCheck(UI_TIMER)){
+	switch(ucKeyAccept){
+	case BUTTON_NONE:
+		break;
+	case BUTTON_CANCEL:
+		if(!kbhit()){
+			ucKeyValue = getkey();
+		}
+		if(ucKeyValue == KEYCANCEL){
+			ScrCls();
+			ScrTextOut(0, 0, "user canceled!");
+			return RET_OK;
+		}
+		break;
+	case BUTTON_ENTER:
+		if(!kbhit()){
+			ucKeyValue = getkey();
+		}
+		if(ucKeyValue == KEYENTER){
+			ScrCls();
+			ScrTextOut(0, 0, "user confirmed!");
+			return RET_OK;
+		}
+		break;
+	case BUTTON_ENTER_CANCEL:
+		if(!kbhit()){
+			ucKeyValue = getkey();
+		}
+		if(ucKeyValue == KEYENTER || ucKeyValue == KEYENTER ){
+			ScrCls();
+			ScrTextOut(0, 0, "exit successed!");
+			return RET_OK;
+		}
+		break;
+	default:
+		break;		
+	}
+	}
+	if(!TimerCheck(UI_TIMER)){
+		ScrCls();
+		ScrTextOut(0, 0, "timeout exit!");
+		return UI_ERR_TIME_OUT;
+	}
+	else{
+		ScrCls();
+		ScrTextOut(0, 0, "return successed");
+		return RET_OK;
+	}
+}
+
+int EShowMenuList(const uchar *pucPageName,const uint uiMsgLength, const uchar  *pucMsg, uchar *pucResponse, const ushort usTimeout)
+{
+	int  iRet = 0;
+	uchar ucKeyAccept = BUTTON_NONE, ucKeyValue = 0;
+	uchar buff[1024]={0};
+
+	if(pucMsg == NULL){
+		ComDebugTx("pucMsg == NULL\n");
+		return UI_ERR_MSG_NULL;
+	}
+		
+	iRet = ParseUi(pucPageName,buff);
+	if(iRet < 0){
+		ComDebugTx("EShowMenuList ParseUi  iRet = %d\n", iRet);
+		return iRet;
+	}
+
+	if(usTimeout != 0 ){
+		TimerSet(UI_TIMER,usTimeout);
+	}
+
+	iRet = SetElement(buff, uiMsgLength, pucMsg, &ucKeyAccept, NULL);
+	if(iRet != 0){
+		return UI_ERR_SET_ELEMENT_FAILED;
+	}
+	
+	if(TimerCheck(UI_TIMER) ){
+		if(!kbhit()){
+			ucKeyValue = getkey();
+		}
+		else
+			ucKeyValue = getkey();
+		memcpy(pucResponse, &ucKeyValue, sizeof(uchar));
+		ScrCls();
+		ScrTextOut(0, 0, "return successed!");
+	}
+	if(!TimerCheck(UI_TIMER)){
+		ScrCls();
+		ScrTextOut(0, 0, "timeout exit!");
+		return UI_ERR_TIME_OUT;
+	}
+	else
+		return RET_OK;	
+}
+
+int ShowMsgBox(const uchar * pucRequest)
+{
+	uint uiReqOffset = 0;
+	uint uiLength = 0;
+	uchar ucPageName[PAGENAME_LENGTH_MAX]={0};
+	uchar ucMsgBuff[1024]={0};
+	ushort usTimeout = 0;
+	uint uiDataLength = 0;
+	memset(ucPageName, 0, sizeof(ucPageName));
+	memset(ucMsgBuff,  0, sizeof(ucMsgBuff));
+
+	AppHexLog("EShowMsgBox ParseUi pucRequest=", pucRequest,65);
+	uiDataLength = (uint)pucRequest[uiReqOffset]<<24 | (uint)pucRequest[uiReqOffset+1]<<16 | (uint)pucRequest[uiReqOffset+2]<<8 |(uint)pucRequest[uiReqOffset+3];
+	uiReqOffset += sizeof(uint);
+	AppLog("ShowMsgBox uiDataLength= %d\n", uiDataLength);
+	uiLength = pucRequest[uiReqOffset];
+	uiReqOffset++;
+	AppLog("ShowMsgBox ucPageName Length= %d, %d\n", uiLength, pucRequest[uiReqOffset]);
+	memcpy(ucPageName, pucRequest+ uiReqOffset, uiLength);
+	uiReqOffset +=  uiLength;
+	AppLog("ShowMsgBox ucPageName=%s\n", ucPageName);	
+	usTimeout =  (ushort)pucRequest[uiReqOffset] << 8 | (ushort)pucRequest[uiReqOffset + 1];
+	uiReqOffset +=  sizeof(ushort);
+	AppLog("ShowMsgBox usTimeout=%d\n", usTimeout);	
+	uiLength = uiDataLength - pucRequest[4] -1-sizeof(ushort);
+	memcpy(ucMsgBuff, pucRequest+ uiReqOffset, uiLength);
+
+	AppLog("ShowMsgBox ucMsgBuff=%s\n", ucMsgBuff);
+	AppHexLog("ShowMsgBox ucMsgBuff =", ucMsgBuff,uiLength);
+	AppLog("ShowMsgBox uiLength=%d\n", uiLength);
+	EShowMsgBox(ucPageName, uiLength, ucMsgBuff ,usTimeout);
+
+	return 0;
+}
+
+static int SetShowAlign(char * pszInfo, int iAlign, int iFontSize)
+{
+	int iXLocation =0;
+	int iLen = 0;
+	iLen = strlen(pszInfo) + 1;
+	if(pszInfo != NULL){
+		if(iAlign == ALIGN_LEFT){
+			iXLocation = 0;
+		}
+		
+		if(iAlign == ALIGN_CENTER){
+			if(iFontSize == 0){
+				iXLocation = 6*(21-iLen)/2;
+			}
+			if(iFontSize == 1){
+				iXLocation = 8*(16-iLen)/2;
+			}
+			if(iFontSize == 2){
+				iXLocation = 12*(10-iLen)/2;
+			}
+		}
+
+		if(iAlign == ALIGN_RIGHT){
+			if(iFontSize == 0){
+				iXLocation = 6*(21-iLen);
+			}
+			if(iFontSize == 1){
+				iXLocation = 8*(16-iLen);
+			}
+			if(iFontSize == 2){
+				iXLocation = 12*(10-iLen);
+			}
+		}
+	}
+	
+	return iXLocation;
+}
+
+
+/* fontType: 0 - 6x8/16x16			21个宽x 高
+			 1 - 8x16/16x16		16个
+			 2 - 12x24/24x24		10个
+*/
+static void SetCustomizedFont(int iFontType)
+{
+	ST_FONT singleFont, doubleFont;
+
+	memset(&singleFont, 0, sizeof(ST_FONT));
+	memset(&doubleFont, 0, sizeof(ST_FONT));
+
+	singleFont.CharSet = CHARSET_WEST;
+	doubleFont.CharSet = CHARSET_GB2312;
+
+	if (0 == iFontType){
+		singleFont.Width = 6;
+		singleFont.Height = 8;
+		doubleFont.Width = 16;
+		doubleFont.Height = 16;
+	}
+	else if (1 == iFontType){
+		singleFont.Width = 8;
+		singleFont.Height = 16;
+		doubleFont.Width = 16;
+		doubleFont.Height = 16;
+	}
+	else{
+		singleFont.Width = 12;
+		singleFont.Height = 24;
+		doubleFont.Width = 24;
+		doubleFont.Height = 24;
+	}
+
+	ScrSelectFont(&singleFont, &doubleFont);
+}
+
+static int SetElement(const uchar *buff, const uint uiMsgLength, const uchar *pucMsg, uchar *ucKeyAccept, uchar *pucResponse){
+	int   iRet = 0, xmlOffset = 0, iMsgOffset = 0, iLength = 0;
+	uchar ucXLocation = 0;
+	uchar ucMenuIndex = 0;
+
+	uchar ucWidgetName[WIDGETNAME_LENGTH_MAX]={0};
+	uchar ucTextBuff[MSG_LENGTH_MAX]={0};
+	uchar ucPicBuff[768]={0};
+	uchar ucMenuItemBuff[MENUITEM_LENGTH_MAX]={0};
+
+	uchar XmlTag = 1;
+
+	ST_TEXTBOX_WIDGET stTextboxWidget;
+	ST_PICTURE_WIDGET stPictureWidget;
+	ST_INPUTBOX_WIDGET stInputboxWidget;
+	ST_MENU_WIDGET stMenuWidget;
+
+	if(pucMsg == NULL){
+		ComDebugTx("pucMsg == NULL\n");
+		return UI_ERR_MSG_NULL;
+	}
+	
+	ScrCls();
+	ScrCls();
+	while( iMsgOffset <= uiMsgLength && XmlTag == 1){
+			memset(ucWidgetName, 0, sizeof(ucWidgetName));
+			memset(ucTextBuff, 0, sizeof(ucTextBuff));
+			memset(ucPicBuff, 0, sizeof(ucPicBuff));
+			switch(buff[xmlOffset]){
+				case TEXTBOX:
+					ComDebugTx("TEXTBOX... \n");
+					if(pucMsg == NULL)
+					{
+						ComDebugTx("pucMsg is NULL\n");
+						return UI_ERR_MSG_NULL;
+					}
+					
+					iLength = pucMsg[iMsgOffset];
+					iMsgOffset++;
+					xmlOffset++;
+					memcpy(&stTextboxWidget, buff +xmlOffset, sizeof(ST_TEXTBOX_WIDGET));
+					memcpy(ucWidgetName, pucMsg + iMsgOffset, iLength);
+					iMsgOffset += iLength;
+					iLength = pucMsg[iMsgOffset];
+					iMsgOffset++;
+					memcpy(ucTextBuff,pucMsg + iMsgOffset, iLength);
+					iMsgOffset += iLength;
+					
+					ucKeyAccept = stTextboxWidget.keyaccept;
+					SetCustomizedFont(stTextboxWidget.fontsize);
+					ScrAttrSet(stTextboxWidget.mode);
+					
+					if(strcmp(stTextboxWidget.name, ucWidgetName)==0 && ucTextBuff != NULL){
+						memcpy(stTextboxWidget.value, ucTextBuff, sizeof(ucTextBuff));
+						ucXLocation = SetShowAlign(stTextboxWidget.value, stTextboxWidget.textalign, stTextboxWidget.fontsize);
+						ScrGotoxy(ucXLocation, stTextboxWidget.y);
+					}
+					else{
+						ucXLocation = SetShowAlign(stTextboxWidget.value, stTextboxWidget.textalign, stTextboxWidget.fontsize);
+						ScrGotoxy(ucXLocation, stTextboxWidget.y);
+					}
+					ScrTextOut(ucXLocation, stTextboxWidget.y, stTextboxWidget.value);
+					xmlOffset += sizeof(ST_TEXTBOX_WIDGET);
+
+					if(strcmp(stTextboxWidget.name, ucWidgetName)!=0)
+						return EL_UI_RET_INVALID_WIDGETNAME;
+					break;
+				
+				case PICTUREBOX:
+					ComDebugTx("PICTUREBOX... \n");
+					iLength = pucMsg[iMsgOffset];
+					iMsgOffset++;
+					xmlOffset ++;
+					memcpy(&stPictureWidget, buff +xmlOffset, sizeof(ST_PICTURE_WIDGET));
+					memcpy(ucWidgetName, pucMsg + iMsgOffset, iLength);
+					iMsgOffset +=  iLength;
+					iLength = (ushort)pucMsg[iMsgOffset] | (ushort)pucMsg[iMsgOffset+1]<<8;
+					iMsgOffset += sizeof(ushort);
+					memcpy(ucPicBuff, pucMsg + iMsgOffset, iLength);
+					iMsgOffset = iMsgOffset + iLength;
+					
+					if(strcmp(stPictureWidget.name , ucWidgetName)==0 && ucPicBuff != NULL){
+						memcpy(stPictureWidget.value, ucPicBuff, sizeof(ucPicBuff));
+						ScrDrLogoxy(stPictureWidget.x, stPictureWidget.y, stPictureWidget.value);
+					}
+					ScrDrLogoxy(stPictureWidget.x, stPictureWidget.y, stPictureWidget.value);
+					xmlOffset += sizeof(ST_TEXTBOX_WIDGET);
+	
+					if(strcmp(stPictureWidget.name , ucWidgetName)!=0)
+						return EL_UI_RET_INVALID_WIDGETNAME;
+					break;
+					case INPUTBOX:
+					iLength = pucMsg[iMsgOffset];
+					iMsgOffset++;
+					xmlOffset ++;
+					memcpy(&stInputboxWidget, buff +xmlOffset, sizeof(ST_INPUTBOX_WIDGET));
+					memcpy(ucWidgetName, pucMsg + iMsgOffset, iLength);
+					iMsgOffset +=  iLength;
+					if(strcmp(stInputboxWidget.name, ucWidgetName)==0){
+						if(stInputboxWidget.textalign == ALIGN_LEFT)
+							stInputboxWidget.mode |= 0x04 ;
+						if(stInputboxWidget.textalign == ALIGN_RIGHT)
+							stInputboxWidget.mode &= 0xFB ;
+						ScrGotoxyEx(stInputboxWidget.x, stInputboxWidget.y);
+						iRet = GetString(pucResponse, stInputboxWidget.mode, stInputboxWidget.minlen, stInputboxWidget.maxlen);
+						xmlOffset += sizeof(ST_INPUTBOX_WIDGET);
+					}
+					else
+						return EL_UI_RET_INVALID_WIDGETNAME;			
+					break;
+					case MENU:
+					ComDebugTx("MENU... \n");
+					ucMenuIndex ++;
+					iLength = pucMsg[iMsgOffset];
+					iMsgOffset++;
+					xmlOffset++;
+					memcpy(&stMenuWidget, buff +xmlOffset, sizeof(ST_MENU_WIDGET));
+					memcpy(ucWidgetName, pucMsg + iMsgOffset, iLength);
+					iMsgOffset  +=  iLength;
+					iLength = pucMsg[iMsgOffset];
+					iMsgOffset++;
+					memcpy(ucMenuItemBuff, pucMsg + iMsgOffset, iLength);
+					iMsgOffset  += iLength;
+					if(strcmp(stMenuWidget.name, ucWidgetName) == 0 && ucMenuItemBuff != NULL){
+						sprintf(stMenuWidget.value," %d.%s",ucMenuIndex, ucMenuItemBuff);
+						ucXLocation = SetShowAlign(stMenuWidget.value, stMenuWidget.textalign, stMenuWidget.fontsize);
+						ScrGotoxy(ucXLocation, stMenuWidget.y);
+						SetCustomizedFont(stMenuWidget.fontsize);
+						ScrTextOut(ucXLocation, stMenuWidget.y, stMenuWidget.value);
+						xmlOffset += sizeof(ST_MENU_WIDGET);	
+					}
+					else
+						return EL_UI_RET_INVALID_WIDGETNAME;
+							
+					break;	
+				default:
+					XmlTag = 0;
+					break;
+			}
+	}
+	
+	return 0;
+}
+

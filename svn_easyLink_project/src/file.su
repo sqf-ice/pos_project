@@ -1,0 +1,13 @@
+file.c:342:12:GetBlkIndex	0	static
+file.c:36:12:SaveFileInfo	16	static
+file.c:201:15:GetFileType	24	static
+file.c:472:5:PdkFile_Open	32	static
+file.c:478:5:PdkFile_Exist	24	static
+file.c:494:5:PdkFile_Read	40	static
+file.c:658:5:PdkFile_Write	48	static
+file.c:831:5:PdkFile_Close	8	static
+file.c:851:5:PdkFile_Seek	32	static
+file.c:950:5:PdkFile_GetSize	24	static
+file.c:1026:5:PdkFile_Truncate	8	static
+file.c:1056:5:PdkFile_Remove	24	static
+file.c:1118:6:SysFileInit	16	static

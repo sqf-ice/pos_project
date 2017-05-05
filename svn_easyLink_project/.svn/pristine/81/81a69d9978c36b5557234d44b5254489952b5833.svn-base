@@ -1,0 +1,423 @@
+/*------------------------------------------------------------
+* FileName: transmain.c
+* Author: liukai
+* Date: 2016-08-15
+------------------------------------------------------------*/
+
+#include "..\inc\global.h"
+
+
+#define CARD_ENTRY_MODE_SWIPE		0x01
+#define CARD_ENTRY_MODE_INSERT		0x02
+#define CARD_ENTRY_MODE_FALLBACK	0x04
+#define CARD_ENTRY_MODE_TAP			0x10
+uchar g_ucCardEntryMode = CARD_ENTRY_MODE_SWIPE | CARD_ENTRY_MODE_INSERT; 
+
+
+static void ProcResult(int iRet)
+{
+	//Display corresponding prompt on the terminal.
+	switch ( iRet ) {
+	case TRANS_ICC_RESET_ERR:
+		break;
+	case TRANS_ICC_CMD_ERR:
+		break;
+	case TRANS_ICC_BLOCK:
+		break;
+	case TRANS_EMV_RSP_ERR:
+		break;
+	case TRANS_EMV_APP_BLOCK:
+		break;
+	case TRANS_EMV_NO_APP:
+		break;
+	case TRANS_EMV_USER_CANCEL:
+		break;
+	case TRANS_EMV_TIME_OUT:
+		break;
+	case TRANS_EMV_DATA_ERR:
+		break;
+	case TRANS_EMV_NOT_ACCEPT:
+		break;
+	case TRANS_EMV_DENIAL:
+		break;
+	case TRANS_EMV_KEY_EXP:
+		break;
+	case TRANS_EMV_NO_PINPAD:
+		break;
+	case TRANS_EMV_NO_PASSWORD:
+		break;
+	case TRANS_EMV_SUM_ERR:
+		break;
+	case TRANS_EMV_NOT_FOUND:
+		break;
+	case TRANS_EMV_NO_DATA:
+		break;
+	case TRANS_EMV_OVERFLOW:
+		break;
+	case TRANS_NO_TRANS_LOG:
+		break;
+	case TRANS_RECORD_NOTEXIST:
+		break;
+	case TRANS_LOGITEM_NOTEXIST:
+		break;
+	case TRANS_ICC_RSP_6985:
+		break;
+	case TRANS_CLSS_USE_CONTACT:
+		break;
+	case TRANS_EMV_FILE_ERR:
+		break;
+	case TRANS_CLSS_TERMINATE:
+		break;
+	case TRANS_CLSS_FAILED:
+		break;
+	case TRANS_CLSS_DECLINE:
+		break;
+	case TRANS_CLSS_TRY_ANOTHER_CARD:
+		break;
+// TRANS_						(TRANS_BASE - 29)
+	case TRANS_PARAM_ERR:
+		break;
+	case TRANS_CLSS_WAVE2_OVERSEA:
+		break;
+	case TRANS_CLSS_WAVE2_TERMINATED:
+		break;
+	case TRANS_CLSS_WAVE2_US_CARD:
+		break;
+	case TRANS_CLSS_WAVE3_INS_CARD:
+		break;
+	case TRANS_CLSS_RESELECT_APP:
+		break;
+	case TRANS_CLSS_CARD_EXPIRED:
+		break;
+	case TRANS_EMV_NO_APP_PPSE_ERR:
+		break;
+	case TRANS_CLSS_USE_VSDC:
+		break;
+	case TRANS_CLSS_CVMDECLINE:
+		break;
+	case TRANS_CLSS_REFER_CONSUMER_DEVICE:
+		break;
+	case TRANS_CLSS_LAST_CMD_ERR:
+		break;
+	case TRANS_CLSS_API_ORDER_ERR:
+		break;
+	default:
+		break;
+	}
+}
+
+static int TransInit()
+{
+	int iRet=0;
+
+	MagOpen();
+
+	iRet = PiccOpen();
+	if ( iRet != 0 )
+	{
+		PiccClose();
+		return iRet;
+	}
+
+	return EMV_OK;
+}
+
+// 提示拔出IC卡
+void PromptRemoveICC(void)
+{
+	IccClose(ICC_USER);
+	if( IccDetect(ICC_USER)!=0 )	// 如果IC卡已拔出，直接返回。
+	{
+		return;
+	}
+
+	// 显示并等待IC卡拔出
+	ScrCls();
+	PubDispString("PLS REMOVE CARD", 0|DISP_LINE_LEFT);
+	while( IccDetect(ICC_USER)==0 )
+	{
+		Beep();
+		DelayMs(500);
+	}
+}
+
+// 从磁道信息分析出卡号(PAN)
+// get PAN from track
+int GetPanFromTrack(const uchar *pucTrackTwoData, const uchar *pucTrackThreeData, uchar *pszPAN, uchar *pszExpDate)
+{
+	int		iPanLen;
+	char	*p, *pszTemp;
+
+	// 从2磁道开始到'＝'
+	// read data from the start of track #2 to '-'
+	if( strlen((char *)pucTrackTwoData)>0 )
+	{
+		pszTemp = (char *)pucTrackTwoData;
+	}
+	else if( strlen((char *)pucTrackThreeData)>0 )
+	{
+		pszTemp = (char *)&pucTrackThreeData[2];
+	}
+	else
+	{	// 2、3磁道都没有
+		// track #2 and #3 are not existed
+		return -1;
+	}
+
+	p = strchr((char *)pszTemp, '=');
+	if( p==NULL )
+	{
+		return -1;
+	}
+	iPanLen = p - pszTemp;
+	if( iPanLen<13 || iPanLen>19 )
+	{
+		return -1;
+	}
+
+	sprintf((char *)pszPAN, "%.*s", iPanLen, pszTemp);
+	if( pszTemp==(char *)pucTrackTwoData )
+	{
+		sprintf((char *)pszExpDate, "%.4s", p+1);
+	}
+	else
+	{
+		sprintf((char *)pszExpDate, "0000");
+	}
+
+	return 0;
+}
+
+int ReadMagCardInfo(void)
+{
+	unsigned char ucRet=0;
+	unsigned char ucTrackOneData[79+1]={0}, ucTrackTwoData[37+1]={0}, ucTrackThreeData[107+1]={0};
+	unsigned char ucPAN[19+1]={0}, ucExpDate[4+1]={0};
+
+	g_tTransParam.ucCurrentTxnType[0] = TRANS_TYPE_MAGNETIC;
+	ucRet = MagRead(ucTrackOneData, ucTrackTwoData, ucTrackThreeData);
+	if ( !ucRet ) {
+		ScrCls();
+		PubDispString("READ CARD ERR", 0|DISP_LINE_LEFT);
+		// ==== Modified by ZhangYuan 2016-10-17 ======
+	//	getkey();	
+		DelayMs(100);
+		// ==== end ==============================
+
+		return ucRet;
+	}
+#ifdef DEBUG_
+	AppLog("TrackOneData = %s\n", ucTrackOneData);
+	AppLog("TrackTwoData = %s\n", ucTrackTwoData);
+	AppLog("TrackThreeData = %s\n", ucTrackThreeData);
+#endif
+
+	SetConfigurationData(CMD_TXN_TRACK_ONE_DATA, CONFIGURATION_TAG_LENGTH, ucTrackOneData, strlen(ucTrackOneData));
+	SetConfigurationData(CMD_TXN_TRACK_TWO_DATA, CONFIGURATION_TAG_LENGTH, ucTrackTwoData, strlen(ucTrackTwoData));
+	SetConfigurationData(CMD_TXN_TRACK_THREE_DATA, CONFIGURATION_TAG_LENGTH, ucTrackThreeData, strlen(ucTrackThreeData));
+
+	GetPanFromTrack(ucTrackTwoData, ucTrackThreeData, ucPAN, ucExpDate);
+	memcpy(g_tTransParam.ucPAN, ucPAN, strlen(ucPAN));
+#ifdef DEBUG_
+	AppLog("ucPAN = %s\n", ucPAN);
+#endif
+
+
+	
+	return EMV_OK;
+}
+
+// Check service code in track 2, whther it is 2 or 6
+unsigned char IsChipCard(const uchar *pszTrack2)
+{
+	char *pszSeperator=NULL;
+
+	if( *pszTrack2==0 )
+	{
+		return FALSE;
+	}
+
+	pszSeperator = strchr((char *)pszTrack2, '=');
+	if( pszSeperator==NULL )
+	{
+		return FALSE;
+	}
+	if( (pszSeperator[5]=='2') || (pszSeperator[5]=='6') )
+	{
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+//Magnetic stripe card process.
+static int MagCardStartTransaction(void)
+{
+	int iRet=0;
+
+	g_tTransParam.ucCurrentTxnType[0] = TRANS_TYPE_MAGNETIC;
+	
+	iRet = ReadMagCardInfo();
+	if ( iRet != 0 ) {
+		return iRet;
+	}
+	
+	if ( g_ucIsFallBack == TRUE ) {
+		if ( IsChipCard(g_tTransParam.ucTrackTwoData) ) {
+			g_tTransParam.ucCurrentTxnType[0] = TRANS_TYPE_FALLBACK_MAGNETIC;
+			return EMV_OK;
+		} else {
+			ScrCls();
+			PubDispString("RESWIPE CARD", 0|DISP_LINE_LEFT);
+			Beep();
+//			getkey();		// commented out by ZhangYuan 2016-10-17 detect mag swipe after fallback swipe prompt
+			return -1;
+		}
+	} else if ( IsChipCard(g_tTransParam.ucTrackTwoData) ) {
+		ScrCls();		
+		PubDispString("PLZ INSERT CARD", 0|DISP_LINE_LEFT);
+		Beep();
+//		getkey();		// commented out by ZhangYuan 2016-10-17 detect mag swipe after fallback swipe prompt
+		return -2;
+	} else {
+		return EMV_OK;
+	}
+
+	return EMV_OK;
+}
+
+int StartTransaction(void)
+{
+	int iRet=0;
+	unsigned char ucTemp[48]={0};
+	unsigned char szTotalAmt[12+1]={0};
+
+	g_ucIsFallBack = 0x00;
+	g_ucCardEntryMode = CARD_ENTRY_MODE_SWIPE | CARD_ENTRY_MODE_INSERT | CARD_ENTRY_MODE_TAP; 	
+
+	iRet = TransInit();
+	if ( iRet ) {
+		return iRet;
+	}
+
+#ifdef EUI_
+	//TODO Display prompt here, show card prompt	
+#else
+	ScrCls();
+	PubDispString("INSERT/SWIPE/TAP", 0|DISP_LINE_LEFT);
+	PubDispString("CARD", 2|DISP_LINE_CENTER);
+#endif
+	
+	memset(ucTemp, 0, sizeof(ucTemp));
+	memset(szTotalAmt, 0, sizeof(szTotalAmt));
+/*
+	sprintf((char *)szTotalAmt, "%l", sg_tClssTransParam.ulAmntAuth);
+	PubConvAmount(glSysParam.stEdcInfo.stLocalCurrency.szName, szTotalAmt,
+				glProcInfo.stTranLog.stTranCurrency.ucDecimal,
+				glProcInfo.stTranLog.stTranCurrency.ucIgnoreDigit,
+				ucTemp, 0);
+*/	
+	//for test 
+	g_tAppParam.ucFallbackAllowFlag[0] = APPPARAM_FALLBACK_ALLOW;
+
+	// Added by ZhangYuan 2016-10-13 add timer for StartTransaction
+	TimerSet(TIMER_TRANS, 550);
+	// Added end
+
+	while( 1 ) {
+		//detect swipe card
+		if ( (g_ucCardEntryMode & CARD_ENTRY_MODE_SWIPE || g_ucCardEntryMode & CARD_ENTRY_MODE_FALLBACK) 
+				&& 0 == MagSwiped() ) 
+		{			
+			iRet = MagCardStartTransaction();
+			if(iRet == EMV_OK)
+			{
+				break;
+			}
+		}
+
+		//detect insert card
+		if ( (g_ucCardEntryMode & CARD_ENTRY_MODE_INSERT) && 0 == IccDetect(0) ) {
+			// Added by ZhangYuan 2016-10-19
+			if(g_ucCardEntryMode & CARD_ENTRY_MODE_FALLBACK)
+			{
+				ScrCls();
+				PubDispString("FALL BACK", 0|DISP_LINE_LEFT);
+				PubDispString("PLS SWIPE CARD", 2|DISP_LINE_LEFT);
+				Beep();
+				continue;
+			}
+			// Added end
+			
+			iRet = EMVStartTransaction();
+			if ( iRet == EL_EMV_RET_FALLBACK ) {
+				PromptRemoveICC();
+				ScrCls();
+				PubDispString("FALL BACK", 0|DISP_LINE_LEFT);
+				PubDispString("PLS SWIPE CARD", 2|DISP_LINE_LEFT);
+				Beep();
+//				getkey();		// commented out by ZhangYuan 2016-10-14 detect mag swipe after fallback swipe prompt
+				g_ucCardEntryMode &= ~CARD_ENTRY_MODE_INSERT; // Added by ZhangYuan 2016-10-19
+				continue;
+			}
+			break;
+		}
+
+		//detect tap card
+		if ( (g_ucCardEntryMode & CARD_ENTRY_MODE_TAP) && 0 == PiccDetect(0, NULL, NULL, NULL, NULL) ) {
+#ifndef _WIN32
+			iRet = ClssStartTransaction();
+#endif
+			break;
+		}
+
+		//detect key input
+		if ( 0 == kbhit() ) {
+			if ( KEYCANCEL == getkey() ) {
+				iRet = TRANS_EMV_USER_CANCEL;
+				break;
+			}
+		}
+
+		// ==== Added by ZhangYuan 2016-10-13 add timer check, if timeout, return
+		if( TimerCheck(TIMER_TRANS) == 0x00)
+		{
+			iRet = TRANS_EMV_TIME_OUT;	// the return code is to be determined
+			break;
+		}
+		// === Added end ============================================
+	}
+
+	// Added by ZhangYuan 2016-10-17 ========
+	ScrCls();
+	MagClose();
+	PiccClose();
+	// Added end ==========================
+
+	//return code process
+	ProcResult(iRet);
+
+	if ( iRet ) {
+		return iRet;
+	}
+
+	return EMV_OK;
+}
+
+
+int CompleteTransaction(void)
+{
+	int iRet=0;
+
+	if ( g_tTransParam.ucCurrentTxnType[0] == TRANS_TYPE_CONTACTLESS ) {
+#ifndef _WIN32
+		iRet = ClssCompleteTrans();
+#endif
+	} else if ( g_tTransParam.ucCurrentTxnType[0] == TRANS_TYPE_EMV_CONTACT ) {
+		iRet = EMVCompleteTransaction();
+	} else {
+		
+	}
+
+	return EMV_OK;
+}

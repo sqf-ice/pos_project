@@ -1,0 +1,173 @@
+//============================================================================
+// Name        : ui.h
+// Author      :tuxq
+// Version     :
+// Copyright   : Your copyright notice
+// Description : Ansi-style
+//============================================================================
+#ifndef PRINTER_H
+#define PRINTER_H
+
+#include "posapi.h"
+
+#define UI_TIMER  4
+#define TRUE 	1
+#define FALSE 	0
+
+#define PAGENAME_LENGTH_MAX 32
+#define WIDGETNAME_LENGTH_MAX    32
+#define MENUITEM_LENGTH_MAX 32
+#define MSG_LENGTH_MAX		20
+#define WIDGET_NUM_MAX		10
+
+#define CMD_INFO_TITLE                  "title"             //标题
+#define CMD_INFO_VALUE                  "value"           //当前值
+#define CMD_INFO_EDIT                  	"edit"
+#define CMD_INFO_PROMPT                 "prompt"            //显示的字符串
+#define CMD_INFO_LOGO				"logo"
+
+#define XML_HOME_SCREEN	"home_screen.xml"
+#define XML_PIN_INPUT		"input_pin.xml"
+#define XML_SELAPP_MENU	"selectapp_menu.xml"
+
+#define FONT_0_MAX	21
+#define FONT_1_MAX  16
+#define FONT_2_MAX	10
+
+#define TAG_POS		1
+#define TAG_MOBILE	2
+
+#define NUM			0xA0
+#define ALPHA		0x90
+#define DECIMAL		0xA2
+#define PASSWARD	0xB8
+#define PIN_PAD		0xD0
+
+
+enum UI_RET										//scanner module		
+{
+	EL_UI_RET_BASE			=(2000),
+	EL_UI_RET_INVALID_WIDGETNAME	=(EL_UI_RET_BASE + 1),	//invalid widget name
+	EL_UI_RET_TIME_OUT		=(EL_UI_RET_BASE + 2),	//time out
+	EL_UI_RET_INVALID_PAGE	=(EL_UI_RET_BASE +3),	//invalid page
+	EL_UI_RET_PARSEUI_FAILED	=(EL_UI_RET_BASE +4),	//parseui failed
+	EL_UI_RET_VALUESIZEERROR	=(EL_UI_RET_BASE +5),	//widget value size error
+	EL_UI_RET_INPUT_TYPE_ERROR =(EL_UI_RET_BASE + 6),	//input type not find
+	EL_UI_RET_INVALID_WIDGETVALUE = (EL_UI_RET_BASE + 7),	//invalid widget value
+};
+
+typedef enum{
+	TEXTBOX = 1,
+	PICTUREBOX,
+	INPUTBOX,
+	MENUITEM,
+}ENUM_WIDGET_INDEX;
+
+typedef enum {
+	NAME = 1,
+	X,
+	Y,
+	VALUE,
+	FONTSIZE,
+	TEXTALIGN,
+	MODE,
+	KEYACCEPT,
+	MINLEN,
+	MAXLEN,
+}ENUM_WIDGET_ATTR;
+
+
+typedef enum{
+	ALIGN_LEFT = 1,
+	ALIGN_CENTER,
+	ALIGN_RIGHT,
+}ENUM_ALIGN_ATTR;
+
+typedef enum{
+	BUTTON_NONE = 1,
+	BUTTON_ENTER,
+	BUTTON_CANCEL,
+	BUTTON_ENTER_CANCEL,
+}ENUM_KEYACCEPT;
+
+typedef enum{
+	INPUT_TYPE_NUM = 1,
+	INPUT_TYPE_ALPHA,
+	INPUT_TYPE_DECIMAL,
+	INPUT_TYPE_PASSWARD,
+	INPUT_TYPE_PINPAD,
+}ENUM_INPUTTYPE;
+
+typedef struct {
+	uchar name[32];
+	uchar x;
+	uchar y;
+	uchar value[32];
+	uchar fontsize;
+	uchar textalign;
+	uchar mode;
+	uchar keyaccept;
+}ST_TEXTBOX_WIDGET;
+
+typedef struct {
+	uchar name[32];		//widget name
+	uchar x;
+	uchar y;
+	uchar value[128];		//picture path
+}ST_PICTURE_WIDGET;
+
+typedef struct {
+	uchar name[32];
+	uchar x;
+	uchar y;
+	uchar value[32];
+	uchar fontsize;
+	uchar textalign;
+	uchar mode;
+	uchar type;
+	uchar keyaccept;//
+	uchar minlen;
+	uchar maxlen;
+}ST_INPUTBOX_WIDGET;
+
+typedef struct {
+	uchar name[32];
+	uchar x;
+	uchar y;
+	uchar value[32];
+	uchar fontsize;
+	uchar textalign;
+}ST_MENU_WIDGET;
+
+
+
+typedef struct _st_disp{
+	uchar ucWidgetName[16];
+	uchar ucText[32];
+}ST_DISP;
+
+typedef struct _st_picture{
+	uchar ucWidgetName[16];
+	uchar ucPicture[1024];
+}ST_PICTURE;
+
+typedef struct _st_inputtype{
+	uchar ucTypeIndex;
+	uchar ucTypeValue;
+}ST_INPUTTYPE;
+
+typedef struct _st_data{
+	uchar ucWidgetName[32];
+	uchar ucWidgetValue[32];
+}ST_DATA;
+
+int EShowMsgBox(const uchar *pucPageName, const ST_DATA  *pucMsg, uchar ucWidgetNum,  const ushort usTimeout, const uchar ucTag);
+int EShowInputBox(const uchar *pucPageName, const ST_DATA  *pucMsg, uchar ucWidgetNum, uchar *pucResponse, const ushort usTimeout, const uchar ucTag);
+int EShowMenuList(const uchar *pucPageName, const ST_DATA  *pucMsg, uchar ucWidgetNum, uchar *pucResponse,const ushort usTimeout, const uchar ucTag);
+
+int ShowMsgBox(const uchar * pucRequest);
+
+static int SetShowAlign(char * pszInfo, int iAlign, int iFontSize);
+static void SetCustomizedFont(int iFontType);
+static int SetElement(const uchar *buff, const ST_DATA *pucMsg, uchar ucWidgetNum, uchar *pucKeyAccept, uchar *ucResponse, const uchar ucTag);
+#endif

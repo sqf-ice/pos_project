@@ -1,0 +1,26 @@
+/*------------------------------------------------------------
+* FileName: transmain.h
+* Author: liukai
+* Date: 2016-08-15
+------------------------------------------------------------*/
+
+#define TRANS_MAIN_DEBUG_
+
+//functions
+/*************************************************************************
+Function: 						StartTransaction
+Parameters Input:
+Parameters Output:
+Return Code:					Find the definations.
+Description:					Start transaction function, external interface.
+*************************************************************************/
+int StartTransaction(void);
+
+/*************************************************************************
+Function: 						CompleteTransaction
+Parameters Input:
+Parameters Output:
+Return Code:					Find the definations.
+Description:					complete transaction function, external interface.
+*************************************************************************/
+int CompleteTransaction(void);

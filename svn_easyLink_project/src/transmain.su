@@ -1,0 +1,7 @@
+transmain.c:189:6:LoadPreProcParam	4408	static
+transmain.c:279:6:PromptRemoveICC	8	static
+transmain.c:299:5:GetPanFromTrack	24	static
+transmain.c:344:5:ReadMagCardInfo	264	static
+transmain.c:383:15:IsChipCard	8	static
+transmain.c:447:5:StartTransaction	128	static
+transmain.c:566:5:CompleteTransaction	8	static

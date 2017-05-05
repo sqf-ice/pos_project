@@ -1,0 +1,1898 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date:2016/10/08    
+ * Module Auth:huangwp     
+ * Description:emv xml file operarte module
+
+ *      
+ * ============================================================================
+ */
+
+#include "..\inc\global.h"
+
+
+//begin to parse aid
+static int GetAidChileNode(uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "PartialAIDSelection") != NULL)
+	{
+		return PARTIALAIDSELECTION;
+	}
+	if(strstr(pucXmlOneLine, "ApplicationID") != NULL)
+	{
+		return APPLICATIONID;
+	}
+	if(strstr(pucXmlOneLine, "IfUseLocalAIDName") != NULL)
+	{
+		return IFUSELOCALNAME;
+	}
+	if(strstr(pucXmlOneLine, "LocalAIDName") != NULL)
+	{
+		return LOACALAIDNAME;
+	}
+	if(strstr(pucXmlOneLine, "TerminalAIDVersion") != NULL)
+	{
+		return TERMINALAIDVERSION;
+	}
+	if(strstr(pucXmlOneLine, "TACDenial") != NULL)
+	{
+		return TACDENIAL;
+	}
+	if(strstr(pucXmlOneLine, "TACOnline") != NULL)
+	{
+		return TACONLINE;
+	}
+	if(strstr(pucXmlOneLine, "TACDefault") != NULL)
+	{
+		return TACDEFAULT;
+	}
+	if(strstr(pucXmlOneLine, "FloorLimit") != NULL)
+	{
+		return FLOORLIMIT;
+	}
+	if(strstr(pucXmlOneLine, "Threshold") != NULL)
+	{
+		return THRESHOLD;
+	}
+	if(strstr(pucXmlOneLine, "TargetPercentage") != NULL)
+	{
+		return TARGETPERCENTAGE;
+	}
+	if(strstr(pucXmlOneLine, "MaxTargetPercentage") != NULL)
+	{
+		return MAXTARGETPERCENTAGE;
+	}
+	if(strstr(pucXmlOneLine, "TerminalDefaultTDOL") != NULL)
+	{
+		return TERMINALDEFAULTTDOL;
+	}
+	if(strstr(pucXmlOneLine, "TerminalDefaultDDOL") != NULL)
+	{
+		return TERMINALDEFAULTDDOL;
+	}
+	if(strstr(pucXmlOneLine, "TerminalRiskManagementData") != NULL)
+	{
+		return TERMINALRISKMANAGEMENTDATA;
+	}
+	else
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+}
+
+static int GetPartialSelectionValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "PartialAIDSelection", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetApplicationIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ApplicationID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int GetIfUseLocalAIDNameValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "IfUseLocalAIDName", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+
+static int GetLocalAIDNameValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "LocalAIDName", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(pucData, pucBuf, sizeof(pucData));
+
+	return iRet;
+}
+
+static int GetTerminalAIDVersionValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalAIDVersion", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetTACDenialValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TACDenial", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int GetTACOnlinelValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TACOnline", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetTACDefaultlValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TACDefault", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetFloorLimitValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "FloorLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetThresholdValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "Threshold", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetTargetPercentageValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TargetPercentage", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetTerminalDefaultTDOLValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalDefaultTDOL", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetMaxTargetPercentageValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MaxTargetPercentage", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetTerminalDefaultDDOLlValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalDefaultDDOL", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetTerminalRiskManagementDataValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalRiskManagementData", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int ParseEmvAidChildNode(const uchar *pucXmlOneLine, EMV_AID_NODE_T *pstAidNode)
+{
+	int iAidChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iAidChildNode = GetAidChileNode(pucXmlOneLine);
+
+	
+	if(iAidChildNode < 0)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	switch(iAidChildNode)
+	{
+		case PARTIALAIDSELECTION:
+			iRet = GetPartialSelectionValue(pucXmlOneLine, &(pstAidNode->SelFlag));
+			break;
+		case APPLICATIONID:
+			iRet = GetApplicationIDValue(pucXmlOneLine, pstAidNode->AID);
+			break;
+		case IFUSELOCALNAME:
+			iRet = GetIfUseLocalAIDNameValue(pucXmlOneLine, &(pstAidNode->IfUseLocalName));
+			break;
+		case LOACALAIDNAME:
+			iRet = GetLocalAIDNameValue(pucXmlOneLine, pstAidNode->AppName);
+			break;
+		case TERMINALAIDVERSION:
+			iRet = GetTerminalAIDVersionValue(pucXmlOneLine, pstAidNode->Version);
+			break;
+		case TACDENIAL:
+			iRet = GetTACDenialValue(pucXmlOneLine, pstAidNode->TACDenial);
+			break;
+		case TACONLINE:
+			iRet = GetTACOnlinelValue(pucXmlOneLine, pstAidNode->TACOnline);
+			break;
+		case TACDEFAULT:
+			iRet = GetTACDefaultlValue(pucXmlOneLine, pstAidNode->TACDefault);
+			break;
+		case FLOORLIMIT:
+			iRet = GetFloorLimitValue(pucXmlOneLine, &(pstAidNode->FloorLimit));
+			break;
+		case THRESHOLD:
+			iRet = GetThresholdValue(pucXmlOneLine, &(pstAidNode->Threshold));
+			break;
+		case TARGETPERCENTAGE:
+			iRet = GetTargetPercentageValue(pucXmlOneLine, &(pstAidNode->TargetPer));
+			break;
+		case MAXTARGETPERCENTAGE:
+			iRet = GetMaxTargetPercentageValue(pucXmlOneLine, &(pstAidNode->MaxTargetPer));
+			break;
+		case TERMINALDEFAULTTDOL:
+			iRet = GetTerminalDefaultTDOLValue(pucXmlOneLine, pstAidNode->tDOL);
+			break;
+		case TERMINALDEFAULTDDOL:
+			iRet = GetTerminalDefaultDDOLlValue(pucXmlOneLine, pstAidNode->dDOL);
+			break;
+
+		case TERMINALRISKMANAGEMENTDATA:
+			iRet = GetTerminalRiskManagementDataValue(pucXmlOneLine, pstAidNode->RiskManData);
+			break;
+
+		default:
+			break;
+	}
+	
+	
+#ifdef EMV_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvAidChildNode---- GetAidChileNode = %d iSize = %d iRet = %d\n", iAidChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+
+//parse capk
+
+static int GetCapkChileNode(uchar *pucXmlOneLine)
+{
+	
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "RID") != NULL)
+	{
+		return RID;
+	}
+	if(strstr(pucXmlOneLine, "KeyID") != NULL)
+	{
+		return KEYID;
+	}
+	if(strstr(pucXmlOneLine, "HashArithmeticIndex") != NULL)
+	{
+		return HASHARITHMETICINDEX;
+	}
+	if(strstr(pucXmlOneLine, "RSAArithmeticIndex") != NULL)
+	{
+		return RSAARITHMRTICINDEX;
+	}
+	if(strstr(pucXmlOneLine, "ModuleLength") != NULL)
+	{
+		return MODULELENGTH;
+	}
+	if(strstr(pucXmlOneLine, "Module") != NULL)
+	{
+		return MODULE;
+	}
+	if(strstr(pucXmlOneLine, "ExponentLength") != NULL)
+	{
+		return EXPONENTLENGTH;
+	}
+	if(strstr(pucXmlOneLine, "Exponent") != NULL)
+	{
+		return EXPONENT;
+	}
+	if(strstr(pucXmlOneLine, "ExpireDate") != NULL)
+	{
+		return EXPIREDATE;
+	}
+	if(strstr(pucXmlOneLine, "CheckSum") != NULL)
+	{
+		return CHECKSUM;
+	}
+	else
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+}
+
+
+static int GetRIDValue(const uchar *pucXmlOneLine,  uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "RID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+	return iRet;
+}
+
+static int GetKeyIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "KeyID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int GetHashArithmeticIndexValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "HashArithmeticIndex", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+
+static int GetRSAArithmeticIndexValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "RSAArithmeticIndex", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+
+static int GetModuleValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "Module", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetModuleLengthValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ModuleLength", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+
+static int GetExponentValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "Exponent", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetExponentLengthValue(const uchar *pucXmlOneLine, int *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ExponentLength", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int GetExpireDateValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ExpireDate", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetCheckSumValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CheckSum", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int ParseEmvCapkChildNode(const uchar *pucXmlOneLine, EMV_CAPK *pstCapkNode)
+{
+	int iCapkChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iCapkChildNode = GetCapkChileNode(pucXmlOneLine);
+
+	
+	if(iCapkChildNode < 0)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	switch(iCapkChildNode)
+	{
+		case RID:
+			iRet = GetRIDValue(pucXmlOneLine, pstCapkNode->RID);
+			break;
+		case KEYID:
+			iRet = GetKeyIDValue(pucXmlOneLine, &(pstCapkNode->KeyID));
+			break;
+		case HASHARITHMETICINDEX:
+			iRet = GetHashArithmeticIndexValue(pucXmlOneLine, &(pstCapkNode->HashInd));
+			break;
+		case RSAARITHMRTICINDEX:
+			iRet = GetRSAArithmeticIndexValue(pucXmlOneLine, &(pstCapkNode->ArithInd));
+			break;
+		case MODULELENGTH:
+			iRet = GetModuleLengthValue(pucXmlOneLine, &(pstCapkNode->ModulLen));
+			break;
+		case MODULE:
+			iRet = GetModuleValue(pucXmlOneLine, pstCapkNode->Modul);
+			break;
+		case EXPONENTLENGTH:
+			iRet = GetExponentLengthValue(pucXmlOneLine, &(pstCapkNode->ExponentLen));
+			break;
+		case EXPONENT:
+			iRet = GetExponentValue(pucXmlOneLine, pstCapkNode->Exponent);
+			break;
+		case EXPIREDATE:
+			iRet = GetExpireDateValue(pucXmlOneLine, pstCapkNode->ExpDate);
+			break;
+		case CHECKSUM:
+			iRet = GetCheckSumValue(pucXmlOneLine, pstCapkNode->CheckSum);
+			break;
+
+		default:
+			break;
+	}
+	
+	
+#ifdef EMV_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvCapkChildNode---- iCapkChildNode = %d iSize = %d iRet = %d\n", iCapkChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+
+//begine to parse ics
+
+static int GetIcsChileNode(uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "Type") != NULL)
+	{
+		return TYPE;
+	}
+	if(strstr(pucXmlOneLine, "TerminalType") != NULL)
+	{
+		return TERMINALTYPE;
+	}
+	if(strstr(pucXmlOneLine, "CardDataInputCapability") != NULL)
+	{
+		return CARDDATAINPUTCAPABILITY;
+	}
+	if(strstr(pucXmlOneLine, "CVMCapability") != NULL)
+	{
+		return CVMCAPABILITY;
+	}
+	if(strstr(pucXmlOneLine, "SecurityCapability") != NULL)
+	{
+		return SECURITYCAPABILITY;
+	}
+	if(strstr(pucXmlOneLine, "AdditionalTerminalCapabilities") != NULL)
+	{
+		return ADDITIONALTERMINALCAPABILITIES;
+	}
+	if(strstr(pucXmlOneLine, "GetDataForPINTryCounter") != NULL)
+	{
+		return GETDATAFORPINTRYCOUNTER;
+	}
+	if(strstr(pucXmlOneLine, "BypassPINEntry") != NULL)
+	{
+		return BYPASSPINENTRY;
+	}
+	if(strstr(pucXmlOneLine, "SubsequentBypassPINEntry") != NULL)
+	{
+		return SUBSEQUENBYPASSPINENTRY;
+	}
+	if(strstr(pucXmlOneLine, "ExceptionFileSupported") != NULL)
+	{
+		return EXCEPTIONFILESUPPORTED;
+	}
+	if(strstr(pucXmlOneLine, "ForcedOnlineCapability") != NULL)
+	{
+		return FORCEDONLINECAPABILITY;
+	}
+	if(strstr(pucXmlOneLine, "IssuerReferralsSupported") != NULL)
+	{
+		return ISSUERFEFERRALSSUPPORTED;
+	}
+	if(strstr(pucXmlOneLine, "ConfigurationCheckSum") != NULL)
+	{
+		return CONFIGURATIONCHECKSUM;
+	}
+	else
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+}
+
+
+static int GetIcsTypeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "Type", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(pucData, pucBuf, sizeof(pucData));
+	return iRet;
+}
+
+static int GetIcsTerminalTypeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalType", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int GetCardDataInputCapabilityValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CardDataInputCapability", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int GetCVMCapabilityValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CVMCapability", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetSecurityCapabilityValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "SecurityCapability", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetAdditionalTerminalCapabilitiesValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "AdditionalTerminalCapabilities", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int GetGetDataForPINTryCounterValue(const uchar *pucXmlOneLine, int *piData)
+{
+	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "GetDataForPINTryCounter", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+
+static int GetBypassPINEntryValue(const uchar *pucXmlOneLine, int *piData)
+{
+	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "BypassPINEntry", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+
+static int GetSubsequentBypassPINEntryValue(const uchar *pucXmlOneLine, int *piData)
+{
+	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "SubsequentBypassPINEntry", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetExceptionFileSupportedValue(const uchar *pucXmlOneLine, int *piData)
+{
+	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ExceptionFileSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetForcedOnlineCapabilityValue(const uchar *pucXmlOneLine, int *piData)
+{
+	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ForcedOnlineCapability", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetIssuerReferralsSupportedValue(const uchar *pucXmlOneLine, int *piData)
+{
+	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "IssuerReferralsSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+
+static int GetConfigurationCheckSumValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ConfigurationCheckSum", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int ParseEmvIcsChildNode(const uchar *pucXmlOneLine, EMV_ICS_NODE_T *pstIcsNode)
+{
+	int iIcsChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iIcsChildNode = GetIcsChileNode(pucXmlOneLine);
+
+	
+	if(iIcsChildNode < 0)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	switch(iIcsChildNode)
+	{
+		case TYPE:
+			iRet = GetIcsTypeValue(pucXmlOneLine, pstIcsNode->Type);
+			break;
+		case TERMINALTYPE:
+			iRet = GetIcsTerminalTypeValue(pucXmlOneLine, pstIcsNode->TerminalType);
+			break;
+		case CARDDATAINPUTCAPABILITY:
+			iRet = GetCardDataInputCapabilityValue(pucXmlOneLine, pstIcsNode->CardDataInputCapability);
+			break;
+		case CVMCAPABILITY:
+			iRet = GetCVMCapabilityValue(pucXmlOneLine, pstIcsNode->CVMCapability);
+			break;
+		case SECURITYCAPABILITY:
+			iRet = GetSecurityCapabilityValue(pucXmlOneLine, pstIcsNode->SecurityCapability);
+			break;
+		case ADDITIONALTERMINALCAPABILITIES:
+			iRet = GetAdditionalTerminalCapabilitiesValue(pucXmlOneLine, pstIcsNode->AdditionalTerminalCapabilities);
+			break;
+		case GETDATAFORPINTRYCOUNTER:
+			iRet = GetGetDataForPINTryCounterValue(pucXmlOneLine, &(pstIcsNode->GetDataForPINTryCounter));
+			break;
+		case BYPASSPINENTRY:
+			iRet = GetBypassPINEntryValue(pucXmlOneLine, &(pstIcsNode->BypassPINEntry));
+			break;
+		case SUBSEQUENBYPASSPINENTRY:
+			iRet = GetSubsequentBypassPINEntryValue(pucXmlOneLine, &(pstIcsNode->SubsequentBypassPINEntry));
+			break;
+		case EXCEPTIONFILESUPPORTED:
+			iRet = GetExceptionFileSupportedValue(pucXmlOneLine, &(pstIcsNode->ExceptionFileSupported));
+			break;
+		case FORCEDONLINECAPABILITY:
+			iRet = GetForcedOnlineCapabilityValue(pucXmlOneLine, &(pstIcsNode->ForcedOnlineCapability));
+			break;
+		case ISSUERFEFERRALSSUPPORTED:
+			iRet = GetIssuerReferralsSupportedValue(pucXmlOneLine, &(pstIcsNode->IssuerReferralsSupported));
+			break;
+		case CONFIGURATIONCHECKSUM:
+			iRet = GetConfigurationCheckSumValue(pucXmlOneLine, pstIcsNode->ConfigurationCheckSum);
+			break;
+
+		default:
+			break;
+	}
+	
+	
+#ifdef EMV_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvIcsChildNode---- GetIcsChileNode = %d iSize = %d iRet = %d\n", iIcsChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+
+
+//begine to parse REVOCATIONLIST
+
+static int GetRevoketionChileNode(uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "RID") != NULL)
+	{
+		return REVOKERID;
+	}
+	if(strstr(pucXmlOneLine, "KeyID") != NULL)
+	{
+		return REVOKEKEYID;
+	}
+	if(strstr(pucXmlOneLine, "CertificateSN") != NULL)
+	{
+		return CERTIFICATESN;
+	}
+	else
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+}
+
+static int GetRevokeCertificateRIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "RID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetRevokeCertificateKeyIDValue(const uchar *pucXmlOneLine, int *piData)
+{
+   	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "KeyID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetRevokeCertificateSNValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CertificateSN", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int ParseEmvRevokeCertificateChildNode(const uchar *pucXmlOneLine, EMV_REVOCLIST *pstRevokeNode)
+{
+	int iRevokeChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iRevokeChildNode = GetRevoketionChileNode(pucXmlOneLine);
+
+	
+	if(iRevokeChildNode < 0)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	switch(iRevokeChildNode)   	
+	{
+		case REVOKERID:
+			iRet = GetRevokeCertificateRIDValue(pucXmlOneLine, pstRevokeNode->ucRid);
+			break;
+		case REVOKEKEYID:
+			iRet = GetRevokeCertificateKeyIDValue(pucXmlOneLine, &(pstRevokeNode->ucIndex));
+			break;
+		case HASHARITHMETICINDEX:
+			iRet = GetRevokeCertificateSNValue(pucXmlOneLine, pstRevokeNode->ucCertSn);
+			break;
+
+		default:
+			break;
+	}
+	
+#ifdef EMV_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvRevokeCertificateChildNode---- GetRevoketionChileNode = %d iSize = %d iRet = %d\n", iRevokeChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+
+
+//begine to parse terminal info
+static int GetTerminalInfoChileNode(uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "MerchantID") != NULL)
+	{
+		return MERCHANTID;
+	}
+	if(strstr(pucXmlOneLine, "TerminalID") != NULL)
+	{
+		return TERMINALID;
+	}
+	if(strstr(pucXmlOneLine, "TerminalCountryCode") != NULL)
+	{
+		return TERMINALCOUNTRYCODE;
+	}
+	if(strstr(pucXmlOneLine, "TerminalCurrencyCode") != NULL)
+	{
+		return TERMINALCURRENCYCODE;
+	}
+	if(strstr(pucXmlOneLine, "TerminalCurrencyExponent") != NULL)
+	{
+		return TERMINALCURRENTCYEXPONENT;
+	}
+	if(strstr(pucXmlOneLine, "ReferenceCurrencyCode") != NULL)
+	{
+		return REFERENCECURRENCYCODE;
+	}
+	if(strstr(pucXmlOneLine, "ReferenceCurrencyExponent") != NULL)
+	{
+		return REFERENCECURRENTEXPONENT;
+	}
+	if(strstr(pucXmlOneLine, "ConversionRatio") != NULL)
+	{
+		return CONVERSIONRATIO;
+	}
+	if(strstr(pucXmlOneLine, "MerchantName") != NULL)
+	{
+		return MECHANTNAME;
+	}
+	if(strstr(pucXmlOneLine, "MerchantLocation") != NULL)
+	{
+		return MERCHANTLOCATION;
+	}
+	if(strstr(pucXmlOneLine, "MerchantCategoryCode") != NULL)
+	{
+		return MERCHANTCATEGORYCODE;
+	}
+	else
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+}
+
+static int GetMerchantIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MerchantID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(pucData, pucBuf, sizeof(pucData));
+	return iRet;
+}
+
+static int GetTerminalIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(pucData, pucBuf, sizeof(pucData));
+	return iRet;
+}
+
+static int GetTerminalCountryCodeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalCountryCode", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetTerminalCurrencyCodeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalCountryCode", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetTerminalCurrencyExponentValue(const uchar *pucXmlOneLine, int *piData)
+{
+	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ForcedOnlineCapability", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetReferenceCurrencyCodeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ReferenceCurrencyCode", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetReferenceCurrencyExponentValue(const uchar *pucXmlOneLine, int *piData)
+{
+	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ReferenceCurrencyExponent", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int GetMerchantCategoryCodeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MerchantCategoryCode", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int GetConversionRatiotValue(const uchar *pucXmlOneLine, int *piData)
+{
+	int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ConversionRatio", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+
+static int GetMerchantNameValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MerchantName", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(pucData, pucBuf, sizeof(pucData));
+	return iRet;
+}
+
+
+static int GetMerchantLocationValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MerchantName", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	memcpy(pucData, pucBuf, sizeof(pucData));
+	return iRet;
+}
+
+static int ParseEmvTerminalInfoChildNode(const uchar *pucXmlOneLine, EMV_TERMINALINFO_NODE_T *pstTermInfoNode)
+{
+	int iTermInfoChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iTermInfoChildNode = GetTerminalInfoChileNode(pucXmlOneLine);
+
+	
+	if(iTermInfoChildNode < 0)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	switch(iTermInfoChildNode)
+	{
+		case MERCHANTID:
+			iRet = GetMerchantIDValue(pucXmlOneLine, pstTermInfoNode->aucMerchId);
+			break;
+		case TERMINALID:
+			iRet = GetTerminalIDValue(pucXmlOneLine, pstTermInfoNode->aucTermId);
+			break;
+		case TERMINALCOUNTRYCODE:
+			iRet = GetTerminalCountryCodeValue(pucXmlOneLine, pstTermInfoNode->aucCountryCode);
+			break;
+		case TERMINALCURRENCYCODE:
+			iRet = GetTerminalCurrencyCodeValue(pucXmlOneLine, pstTermInfoNode->aucTransCurrCode);
+			break;
+		case TERMINALCURRENTCYEXPONENT:
+			iRet = GetTerminalCurrencyExponentValue(pucXmlOneLine, &(pstTermInfoNode->ucTerminalCurrencyExponent));
+			break;
+		case REFERENCECURRENCYCODE:
+			iRet = GetReferenceCurrencyCodeValue(pucXmlOneLine, pstTermInfoNode->aucReferCurrCode);
+			break;
+		case REFERENCECURRENTEXPONENT:
+			iRet = GetReferenceCurrencyExponentValue(pucXmlOneLine, &(pstTermInfoNode->ucReferenceCurrencyExponent));
+			break;
+		case CONVERSIONRATIO:
+			iRet = GetConversionRatiotValue(pucXmlOneLine, &(pstTermInfoNode->ucConversionRatio));
+			break;
+		case MECHANTNAME:
+			iRet = GetMerchantNameValue(pucXmlOneLine, pstTermInfoNode->aucMerchName);
+			break;
+		case MERCHANTLOCATION:
+			iRet = GetMerchantLocationValue(pucXmlOneLine, pstTermInfoNode->aucMerchantLocation);
+			break;
+		case MERCHANTCATEGORYCODE:
+			iRet = GetMerchantCategoryCodeValue(pucXmlOneLine, pstTermInfoNode->aucMerchCateCode);
+			break;
+
+		default:
+			break;
+	}
+	
+	
+#ifdef EMV_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvTerminalInfoChildNode---- GetTerminalInfoChileNode = %d iSize = %d iRet = %d\n", iTermInfoChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+static int FindNodePositonInFile(const uchar *pucFileName, const uchar *pucNodeName, int iPos)
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iSearchLen = 0;
+	uchar ucReadBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar ucTempBuf[EMV_TEMP_BUF_LEN + 1] = {0};
+	uchar ucParseBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar *pucStart  = NULL;
+	uchar *pucLastEnterPos = NULL;
+	int iRet = 0;
+	int iOffset = 0;
+	ulong uiPosition = 0;
+	int iLseek = 0;
+
+	iFd = PdkFile_Open(pucFileName);
+	ComDebugTx("FindNodePositonInFile PdkFile_Open iFd = %d\n", iFd);
+	if(iFd < 0)
+	{
+		ComDebugTx("FindNodePositonInFile PdkFile_Open iFd = %d\n", iFd);
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(pucFileName);
+	ComDebugTx("FindNodePositonInFile PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	if(iFileSize < 0)
+	{
+		ComDebugTx("FindNodePositonInFile PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = PdkFile_Seek (iFd, iPos, SEEK_CUR);
+	ComDebugTx("FindNodePositonInFile PdkFile_Seek iPos PdkFile_Seek = %d\n", iLseek);
+	if(iLseek < 0)
+	{
+		ComDebugTx("FindNodePositonInFile PdkFile_Seek PdkFile_Seek = %d\n", iLseek);
+		return iFileSize;
+	}
+
+	while(iSearchLen < iFileSize)
+	{
+		memset(ucReadBuf, 0, sizeof(ucReadBuf));
+		iRet = PdkFile_Read(iFd, ucReadBuf, 1024);
+		if(iRet < 0)
+		{
+			ComDebugTx("FindNodePositonInFile PdkFile_Read iRet = %d\n", iRet);
+			return iRet;
+		}
+
+		//every time ,we should confirm the last line is whole line
+		pucLastEnterPos = strrchr(ucReadBuf,'\x0d');
+		if(pucLastEnterPos == NULL)
+		{
+			return EMV_XML_FILE_OP_ERR_ONELINE_OVER_1024;
+		}
+		
+		
+		memcpy(ucParseBuf, ucReadBuf, pucLastEnterPos - ucReadBuf);
+		pucStart = strstr(ucParseBuf, pucNodeName);
+		if(pucStart == NULL)
+		{
+		    //the len have search
+			iOffset = 1024 - (pucLastEnterPos - ucReadBuf);
+			ComDebugTx("FindNodePositonInFile 1024 - (pucLastEnterPos - ucReadBuf) = %d\n", iOffset);
+			iSearchLen = iSearchLen + (pucLastEnterPos - ucReadBuf);
+			iLseek = PdkFile_Seek(iFd, -iOffset, SEEK_CUR);
+			if(iLseek < 0)
+			{
+				ComDebugTx("FindNodePositonInFile PdkFile_Seek -iOffsetPdkFile_Seek = %d\n", iLseek);
+				return iLseek;
+			}
+			continue;
+		}
+		else
+		{
+			uiPosition = iSearchLen + (pucStart - ucParseBuf);
+			PdkFile_Close(iFd);
+			return uiPosition;
+		}
+	}
+	return EMV_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+}
+
+
+static int ParseList(const uchar *pucFileName, void *OutData, const uchar *pucListStart, const uchar *pucListEnd,  const uchar *pucNodeStart, const uchar *pucNodeEnd)
+{
+	int iRet = 0;
+	int iListPos = 0;
+	uchar *pucNodeEndTag = NULL;
+	uchar *pucListEndTag = NULL;
+	int iFd = 0;
+	int iFileSize = 0;
+	int iLseek = 0;
+	uchar ucReadBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar ucParseBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar ucXmlLineBuf[EMV_FILE_ONELINE_BUF_LEN] = {0};
+	char *pucStart = NULL;
+	uchar *pucLastEnterPos = NULL;
+	int iSearchLen = 0;
+	int iLen = 0;
+	int iHaveGetLen = 0;
+	int iOffset = 0;
+	EMV_PARSE_CB vFunParseNodeCb;
+
+	if(pucListStart == NULL || pucListEnd == NULL || pucNodeStart == NULL || pucNodeEnd == NULL)
+	{
+		ComDebugTx("ParseList EMV_XML_FILE_OP_ERR_INVALID_PARAM NULL\n");
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	
+	if(strcmp(pucListStart,"<AIDLIST>") == 0)
+	{
+		vFunParseNodeCb = ParseEmvAidChildNode;
+	}
+	else if(strcmp(pucListStart,"<CAPKLIST>") == 0)
+	{
+		vFunParseNodeCb = ParseEmvCapkChildNode;
+	}
+	else if(strcmp(pucListStart,"<ICSCONFIGURATION>") == 0)
+	{
+		vFunParseNodeCb = ParseEmvIcsChildNode;
+	}
+	else if(strcmp(pucListStart,"<REVOCATIONLIST>") == 0)
+	{
+		vFunParseNodeCb = ParseEmvRevokeCertificateChildNode;
+	}
+	else if(strcmp(pucListStart,"<TERMINALCONFIGURATION>") == 0)
+	{
+		vFunParseNodeCb = ParseEmvTerminalInfoChildNode;
+	}
+	else
+	{
+		ComDebugTx("ParseList EMV_XML_FILE_OP_ERR_INVALID_PARAM error Node\n");
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iListPos = FindNodePositonInFile(pucFileName, pucListStart, 0);
+	ComDebugTx("ParseList FindNodePositonInFile iListPos = %d\n", iListPos);
+
+	iFd = PdkFile_Open(pucFileName);
+	if(iFd < 0)
+	{
+		ComDebugTx("ParseAid PdkFile_Open iFd = %d\n", iFd);
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(pucFileName);
+	if(iFileSize < 0)
+	{
+		ComDebugTx("ParseAid PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = PdkFile_Seek (iFd, iListPos, SEEK_CUR);
+	if(iLseek < 0)
+	{
+		ComDebugTx("ParseAid PdkFile_Seek PdkFile_Seek = %d\n", iLseek);
+		return iFileSize;
+	}
+
+	while((iRet + iListPos) < iFileSize)
+	{
+		iRet = PdkFile_Read(iFd, ucReadBuf, 1024);
+		if(iRet < 0)
+		{
+			ComDebugTx("ParseAid PdkFile_Read iRet = %d\n", iRet);
+			return iRet;
+		}
+		ComDebugTx("ParseAid PdkFile_Read ucReadBuf = %d\n", ucReadBuf);
+
+		//every time ,we should confirm the last line is whole line
+		pucLastEnterPos = strrchr(ucReadBuf,'\x0d');
+		if(pucLastEnterPos == NULL)
+		{
+			return EMV_XML_FILE_OP_ERR_ONELINE_OVER_1024;
+		}
+		
+		memcpy(ucParseBuf, ucReadBuf, pucLastEnterPos - ucReadBuf);
+		pucStart = strstr(ucParseBuf, pucNodeStart);
+		if(pucStart == NULL)
+		{
+		    //the len have search
+			iOffset = 1024 - (pucLastEnterPos - ucReadBuf);
+			ComDebugTx("ParseList 1024 - (pucLastEnterPos - ucReadBuf) = %d\n", iOffset);
+			iSearchLen = iSearchLen + (pucLastEnterPos - ucReadBuf);
+			PdkFile_Seek (iFd, -iOffset, SEEK_CUR);
+			continue;
+		}
+		else
+		{
+		    while(iHaveGetLen < (pucLastEnterPos - ucReadBuf))
+		    {
+		    	memset(ucXmlLineBuf, 0, sizeof(ucXmlLineBuf));
+				//offset mean hava get len,the parsebuf's data every line is whole line   include \r\n   
+				iRet = XmlGetOneLineData(ucParseBuf + iHaveGetLen, &iLen, ucXmlLineBuf);
+				if(iRet < 0)
+				{
+					ComDebugTx("ParseAid XmlGetOneLineData iRet = %d\n", iRet);
+					PdkFile_Close (iFd);
+					return iRet;
+				}
+				iHaveGetLen += iLen;
+				
+				pucListEndTag = strstr(ucXmlLineBuf, pucListEnd);
+				if(pucListEndTag != NULL)
+				{
+					return EMV_XML_FILE_LIST_END;
+				}
+				
+				pucNodeEndTag = strstr(ucXmlLineBuf, pucNodeEnd);
+				if(pucNodeEndTag != NULL)
+				{
+					PdkFile_Close (iFd);
+					return XML_PARSE_OK;
+				}
+				else
+				{
+					iRet = vFunParseNodeCb(ucXmlLineBuf, OutData);
+				}
+		    }
+			//parse one aid
+		}
+	}
+	return iRet;
+}
+
+static int ParseAidList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	EMV_AID_NODE_T stAidNode = {0};
+	int iAidIndex = 0;
+	NODE_RECORD_T stNoeRecord = {0};
+
+	while(iRet != EMV_XML_FILE_LIST_END)
+	{
+		memset(&stAidNode, 0, sizeof(stAidNode));
+		iRet = ParseList(pucFileName, &stAidNode, "<AIDLIST>", "</AIDLIST>", "<AID>", "</AID>");
+		if(iRet == XML_PARSE_OK)
+		{
+			//save aid to file   to do	
+			iAidIndex++;
+			ComDebugTx("ParseAidList---- stAidNode.SelFlag = %d \n", stAidNode.SelFlag);
+			AppHexLog("ParseAidList---- stAidNode.AID = \n", stAidNode.AID, sizeof(stAidNode.AID));
+			ComDebugTx("ParseAidList---- stAidNode.IfUseLocalName = %d \n", stAidNode.IfUseLocalName);
+			ComDebugTx("ParseAidList---- stAidNode.AppName = %s \n", stAidNode.AppName);
+			AppHexLog("ParseAidList---- stAidNode.Version = \n", stAidNode.Version, sizeof(stAidNode.Version));
+			AppHexLog("ParseAidList---- stAidNode.TACDenial  \n", stAidNode.TACDenial, sizeof(stAidNode.TACDenial));
+			AppHexLog("ParseAidList---- stAidNode.TACOnline = \n", stAidNode.TACOnline, sizeof(stAidNode.TACOnline));
+			AppHexLog("ParseAidList---- stAidNode.TACDefault = \n", stAidNode.TACDefault, sizeof(stAidNode.TACDefault));
+			ComDebugTx("ParseAidList---- stAidNode.FloorLimit = %d \n", stAidNode.FloorLimit);
+			ComDebugTx("ParseAidList---- stAidNode.TargetPer = %d \n", stAidNode.TargetPer);
+			ComDebugTx("ParseAidList---- stAidNode.MaxTargetPer = %d \n", stAidNode.MaxTargetPer);
+			AppHexLog("ParseAidList---- stAidNode.tDOL = \n", stAidNode.tDOL, sizeof(stAidNode.tDOL));
+			AppHexLog("ParseAidList---- stAidNode.dDOL = \n", stAidNode.dDOL, sizeof(stAidNode.dDOL));
+			AppHexLog("ParseAidList---- stAidNode.RiskManData = \n", stAidNode.RiskManData, sizeof(stAidNode.RiskManData));
+	
+		}
+	}
+	strcpy(stNoeRecord.ucNodeName,"AID");
+	stNoeRecord.count = iAidIndex;
+	return iRet;
+}
+
+static int ParseCapkList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	EMV_CAPK stCapkNode = {0};
+	int iCapkIndex = 0;
+	NODE_RECORD_T stNoeRecord = {0};
+
+	while(iRet != EMV_XML_FILE_LIST_END)
+	{
+		memset(&stCapkNode, 0, sizeof(stCapkNode));
+		iRet = ParseList(pucFileName, &stCapkNode, "<CAPKLIST>", "</CAPKLIST>", "<CAPK>", "</CAPK>");
+		if(iRet == XML_PARSE_OK)
+		{
+			//save aid to file   to do
+			
+			iCapkIndex++;
+			AppHexLog("ParseCapkList---- stCapkNode.RID =\n", stCapkNode.RID, sizeof(stCapkNode.RID));
+			ComDebugTx("ParseCapkList---- stCapkNode.KeyID = %d \n", stCapkNode.KeyID);
+			ComDebugTx("ParseCapkList---- stCapkNode.HashInd = %d \n", stCapkNode.HashInd);
+			ComDebugTx("ParseCapkList---- stCapkNode.ArithInd = %d \n", stCapkNode.ArithInd);
+			ComDebugTx("ParseCapkList---- stCapkNode.ModulLen = %d \n", stCapkNode.ModulLen);
+			AppHexLog("ParseCapkList---- stCapkNode.Modul =\n", stCapkNode.Modul, sizeof(stCapkNode.Modul));
+			ComDebugTx("ParseCapkList---- stCapkNode.ExponentLen = %d \n", stCapkNode.ExponentLen);
+			AppHexLog("ParseCapkList---- stCapkNode.Exponent = \n", stCapkNode.Exponent, sizeof(stCapkNode.Exponent));
+			AppHexLog("ParseCapkList---- stCapkNode.ExpDate = \n", stCapkNode.ExpDate, sizeof(stCapkNode.ExpDate));
+			AppHexLog("ParseCapkList---- stCapkNode.TargetPer = \n", stCapkNode.CheckSum, sizeof(stCapkNode.CheckSum));
+		}
+	}
+	strcpy(stNoeRecord.ucNodeName,"CAPK");
+	stNoeRecord.count = iCapkIndex;
+	return iRet;
+}
+
+static int ParseIcsList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	EMV_ICS_NODE_T stIcsNode = {0};
+	int iIcsIndex = 0;
+	NODE_RECORD_T stNoeRecord = {0};
+
+	while(iRet != EMV_XML_FILE_LIST_END)
+	{
+		memset(&stIcsNode, 0, sizeof(stIcsNode));
+		iRet = ParseList(pucFileName, &stIcsNode, "<ICSCONFIGURATION>", "</ICSCONFIGURATION>", "<ICS>", "</ICS>");
+		if(iRet == XML_PARSE_OK)
+		{
+			//save aid to file   to do
+			
+			iIcsIndex++;
+			ComDebugTx("ParseIcsList---- stIcsNode.Type = %s\n", stIcsNode.Type);
+			AppHexLog("ParseIcsList---- stIcsNode.TerminalType = \n", stIcsNode.TerminalType, sizeof(stIcsNode.TerminalType));
+			AppHexLog("ParseIcsList---- stIcsNode.CardDataInputCapability = \n", stIcsNode.CardDataInputCapability, sizeof(stIcsNode.CardDataInputCapability));
+			AppHexLog("ParseIcsList---- stIcsNode.CVMCapability = \n", stIcsNode.CVMCapability, sizeof(stIcsNode.CVMCapability));
+			AppHexLog("ParseIcsList---- stIcsNode.SecurityCapability = \n", stIcsNode.SecurityCapability, sizeof(stIcsNode.SecurityCapability));
+			AppHexLog("ParseIcsList---- stIcsNode.AdditionalTerminalCapabilities =\n", stIcsNode.AdditionalTerminalCapabilities, sizeof(stIcsNode.AdditionalTerminalCapabilities));
+			ComDebugTx("ParseIcsList---- stIcsNode.GetDataForPINTryCounter = %d \n", stIcsNode.GetDataForPINTryCounter);
+			ComDebugTx("ParseIcsList---- stIcsNode.BypassPINEntry = %d \n", stIcsNode.BypassPINEntry);
+			ComDebugTx("ParseIcsList---- stIcsNode.SubsequentBypassPINEntry = %d \n", stIcsNode.SubsequentBypassPINEntry);
+			ComDebugTx("ParseIcsList---- stIcsNode.ExceptionFileSupported = %d \n", stIcsNode.ExceptionFileSupported);
+			ComDebugTx("ParseIcsList---- stIcsNode.ForcedOnlineCapability = %d \n", stIcsNode.ForcedOnlineCapability);
+			ComDebugTx("ParseIcsList---- stIcsNode.IssuerReferralsSupported = %d \n", stIcsNode.IssuerReferralsSupported);
+			AppHexLog("ParseIcsList---- stIcsNode.ConfigurationCheckSum = \n", stIcsNode.ConfigurationCheckSum, sizeof(stIcsNode.ConfigurationCheckSum));
+
+		}
+	}
+	strcpy(stNoeRecord.ucNodeName,"ICS");
+	stNoeRecord.count = iIcsIndex;
+	return iRet;
+}
+
+static int ParseRevokeCertificateList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	EMV_REVOCLIST stRevokeNode = {0};
+	int iIcsIndex = 0;
+	NODE_RECORD_T stNoeRecord = {0};
+
+	while(iRet != EMV_XML_FILE_LIST_END)
+	{
+		memset(&stRevokeNode, 0, sizeof(stRevokeNode));
+		iRet = ParseList(pucFileName, &stRevokeNode, "<REVOCATIONLIST>", "</REVOCATIONLIST>", "<REVOKEDCERTIFICATE>", "</REVOKEDCERTIFICATE>");
+		if(iRet == XML_PARSE_OK)
+		{
+			//save aid to file   to do
+			
+			iIcsIndex++;
+			AppHexLog("ParseRevokeCertificateList---- stRevokeNode.ucRid = \n", stRevokeNode.ucRid, sizeof(stRevokeNode.ucRid));
+			ComDebugTx("ParseRevokeCertificateList---- stRevokeNode.ucRid = %d\n", stRevokeNode.ucRid);
+			AppHexLog("ParseRevokeCertificateList---- stRevokeNode.ucCertSn = \n", stRevokeNode.ucCertSn, sizeof(stRevokeNode.ucCertSn));
+		}
+	}
+	strcpy(stNoeRecord.ucNodeName,"REVOKEDCERTIFICATE");
+	stNoeRecord.count = iIcsIndex;
+	return iRet;
+}
+
+static int ParseTerminalInfoList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	EMV_TERMINALINFO_NODE_T stTermInfoNode = {0};
+	int iTermInfoIndex = 0;
+	NODE_RECORD_T stNoeRecord = {0};
+
+	while(iRet != EMV_XML_FILE_LIST_END)
+	{
+		memset(&stTermInfoNode, 0, sizeof(stTermInfoNode));
+		iRet = ParseList(pucFileName, &stTermInfoNode, "<TERMINALCONFIGURATION>", "</TERMINALCONFIGURATION>", "<TERMINALCONFIGURATION>", "</TERMINALCONFIGURATION>");
+		if(iRet == XML_PARSE_OK)
+		{
+			//save aid to file   to do
+			
+			iTermInfoIndex++;
+			ComDebugTx("ParseTerminalInfoList---- ParseTerminalInfoList.aucMerchName = %s\n", stTermInfoNode.aucMerchName);
+			ComDebugTx("ParseTerminalInfoList---- ParseTerminalInfoList.TerminalType = %s\n", stTermInfoNode.aucMerchantLocation);
+			ComDebugTx("ParseTerminalInfoList---- ParseTerminalInfoList.aucMerchId = %s\n", stTermInfoNode.aucMerchId);
+			ComDebugTx("ParseTerminalInfoList---- ParseTerminalInfoList.aucTermId = %s\n", stTermInfoNode.aucTermId);
+			AppHexLog("ParseTerminalInfoList----  ParseTerminalInfoList.aucCountryCode = \n", stTermInfoNode.aucCountryCode, sizeof(stTermInfoNode.aucCountryCode));
+			AppHexLog("ParseTerminalInfoList----  ParseTerminalInfoList.aucTransCurrCode =\n", stTermInfoNode.aucTransCurrCode, sizeof(stTermInfoNode.aucTransCurrCode));
+			AppHexLog("ParseTerminalInfoList---- ParseTerminalInfoList.aucReferCurrCode = \n", stTermInfoNode.aucReferCurrCode, sizeof(stTermInfoNode.aucReferCurrCode));
+			AppHexLog("ParseTerminalInfoList---- ParseTerminalInfoList.aucMerchCateCode = \n", stTermInfoNode.aucMerchCateCode, sizeof(stTermInfoNode.aucMerchCateCode));
+			ComDebugTx("ParseTerminalInfoList---- ParseTerminalInfoList.ucTerminalCurrencyExponent = %d \n", stTermInfoNode.ucTerminalCurrencyExponent);
+			ComDebugTx("ParseTerminalInfoList---- ParseTerminalInfoList.ucReferenceCurrencyExponent = %d \n", stTermInfoNode.ucReferenceCurrencyExponent);
+			ComDebugTx("ParseTerminalInfoList---- ParseTerminalInfoList.ucConversionRatio = %d \n", stTermInfoNode.ucConversionRatio);
+		}
+	}
+	strcpy(stNoeRecord.ucNodeName,"TERMINALCONFIGURATION");
+	stNoeRecord.count = iTermInfoIndex;
+	return iRet;
+}
+
+//init the file whic used to stored the have parsed data,save the node info in the start position of file
+static int InitEmvParsedFile(const uchar *pucFileName)
+{
+	int iFd = 0;
+	NODE_RECORD_T stRecord[5] = {0};
+	int iRet = 0;
+
+	iFd = PdkFile_Open(pucFileName);
+	if(iFd < 0)
+	{
+		ComDebugTx("InitEmvParsedFile PdkFile_Open iFd = %d\n", iFd);
+		return iFd;
+	}
+
+	ComDebugTx("InitEmvParsedFile sizeof(stRecord) = %d\n", sizeof(stRecord));
+	iRet = PdkFile_Write (iFd, &stRecord, sizeof(stRecord));
+	if(iRet < 0)
+	{
+		ComDebugTx("InitEmvParsedFile sizeof(stRecord) = %d\n", sizeof(stRecord));
+		PdkFile_Close(iFd);
+		return iRet;
+	}
+	PdkFile_Close(iFd);
+	return iRet;
+}
+
+int ParseEmvFile(const uchar *pucFileName)
+{
+	int iRet = 0;
+    InitEmvParsedFile(EMV_XML_FILE_HAVE_PARSED);
+	ParseAidList(pucFileName);
+	ParseCapkList(pucFileName);
+	ParseIcsList(pucFileName);
+	ParseRevokeCertificateList(pucFileName);
+	ParseTerminalInfoList(pucFileName);
+	return iRet;
+}
+
+

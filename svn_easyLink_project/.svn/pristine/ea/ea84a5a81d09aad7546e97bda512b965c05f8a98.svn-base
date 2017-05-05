@@ -1,0 +1,4489 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date: 2016/10/10    
+ * Module Auth: ZhangYuan 
+ * Description:   EMV contactless xml file operarte module
+
+ *      
+ * ============================================================================
+ */
+
+#include "..\inc\global.h"
+
+static int giAidIndex = 0;
+static int giPayPassConfIndex = 0;
+
+
+static int giPayWaveAidIndex = 0;
+static int giPayWaveInterWareIndex = 0;
+static int giPayWavePrgIdIndex = 0;
+static int giPayWaveTermCapIndex = 0;
+static int giClssOhterConfIndex = 0;
+static uchar gucAidLen = 0;
+static uchar gucProgramIdLen = 0;
+
+
+static int giCurrentOffset = 0;
+
+static int giParsePos = 0;
+
+
+static NODE_RECORD_T gstNoeRecord[] = 
+{
+		{"PAYPASS_AID",0,0},
+		{"PAYPASS_PAYPASSCONFIGURATION",0,0},
+		{"PAYWAVE_AID",0,0},
+		{"PAYWAVE_INTER_WARE",0,0},
+		{"PAYWAVE_PROGRAMID",0,0},
+		{"PAYWAVE_TERM_CAP",0,0},
+		{"CLSS_OHTER_CONF",0,0},
+};
+
+static int ClssGetRecordIndex(const uchar *pucNodeName, int iSize)
+{
+	int i = 0;
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ClssGetRecordIndex iSize = %d\n", iSize);
+	#endif
+
+	for(i = 0; i < iSize; i++)
+	{
+		if(strcmp(pucNodeName, gstNoeRecord[i].ucListNodeName) == 0)
+		{
+			return i;
+		}
+	}
+	return CLSS_XML_FILE_OP_ERR_RECORD_NOT_FOUNTD;
+}
+
+static int ClssGetRecordData(NODE_RECORD_T *pststRecord, int iLen)
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iHavaReadLen = 0;
+	int iRet = 0;
+	int i = 0;
+
+	iRet = PdkFile_Exist(CLSS_XML_FILE_HAVE_PARSED);
+	if(iRet < 0 )
+	{
+		return iRet;
+	}
+	
+	iFd = PdkFile_Open(CLSS_XML_FILE_HAVE_PARSED);
+	#ifdef EMV_XML_FILE_OP_DEBUG
+	ComDebugTx("ClssGetRecordData PdkFile_Open iFd = %d\n", iFd);
+	#endif
+	if(iFd < 0)
+	{
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ClssGetRecordData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("ClssGetRecordData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		#endif
+		return iFileSize;
+	}
+
+	while(iHavaReadLen < iLen)
+	{
+		memset(pststRecord, 0, iLen);
+		iRet = PdkFile_Read(iFd, (uchar*)pststRecord, iLen);
+
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("ClssGetRecordData PdkFile_Read iRet = %d\n", iRet);
+		#endif
+		iHavaReadLen += iRet;
+		if(iRet < 0)
+		{
+			PdkFile_Close(iFd);
+			#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("ClssGetRecordData PdkFile_Read iRet = %d\n", iRet);
+			#endif
+			return iRet;
+		}
+	}
+	for(i = 0 ; i < sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]); i++ )
+	{
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("ClssGetRecordData stRecord[%d] = %d\n",i,pststRecord[i].count);
+		ComDebugTx("ClssGetRecordData stRecord[%d] = %s\n",i,pststRecord[i].ucListNodeName);
+		ComDebugTx("ClssGetRecordData iStartPos[%d] = %d\n",i,pststRecord[i].iStartPos);
+		#endif
+	}
+	PdkFile_Close(iFd);
+	return 0;
+}
+
+
+int ClssGetNodeNum(const uchar *pucName)
+{
+	int iIndex = 0;
+	int iRet = 0;
+	
+	NODE_RECORD_T stRecord[CLSS_PRASED_RECORD_MAX_NODE_CNT] = {0};
+	
+	iRet = ClssGetRecordData(stRecord, sizeof(stRecord));
+	if(iRet < 0)
+	{
+		ComDebugTx("ClssGetNodeNum ClssGetRecordData iRet = %d\n",iRet);
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex(pucName, sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+	if(iIndex < 0)
+	{
+		ComDebugTx("ClssGetNodeNum ClssGetRecordIndex iIndex = %d\n",iIndex);
+		return iIndex;
+	}
+
+	//ComDebugTx("GetPayPassAidNum ClssGetRecordIndex stRecord[%d].count = %d\n",iIndex,stRecord[iIndex].count);
+
+	return stRecord[iIndex].count;
+
+}
+
+int GetPayPassAidData(PAYPASS_AID_NODE_T *pstPayPassAidNode, int iSize, int iAidIndex)
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iRet = 0;
+	int i = 0;
+	int iBaseOffset = 0;
+	int iOffset = 0;
+	int iIndex = 0;
+	int iLseek = 0 ;
+
+	NODE_RECORD_T stRecord[CLSS_PRASED_RECORD_MAX_NODE_CNT] = {0};
+
+	iRet = ClssGetRecordData(stRecord, sizeof(stRecord));
+	if(iRet < 0)
+	{
+		ComDebugTx("GetPayPassAidData ClssGetRecordData iRet = %d\n",iRet);
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("PAYPASS_AID", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassAidData GetRecordIndex iIndex = %d \n", iIndex);
+	#endif
+	if(iIndex < 0)
+	{
+		ComDebugTx("GetPayPassAidData GetRecordIndex iIndex = %d \n", iIndex);
+		return iIndex;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassAidData GetRecordData stRecord[%d].iStartPos = %d\n",iIndex,stRecord[iIndex].iStartPos);
+	ComDebugTx("GetPayPassAidData GetRecordData stRecord[%d].count = %d\n",iIndex,stRecord[iIndex].count);
+	ComDebugTx("GetPayPassAidData GetRecordData stRecord[%d].ucListNodeName = %s\n",iIndex,stRecord[iIndex].ucListNodeName);
+	#endif
+
+	if(iAidIndex > stRecord[iIndex].count)
+	{
+		return CLSS_XML_FILE_OP_ERR_AID_OVER_FLOW;
+	}
+	
+	iFd = PdkFile_Open(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassAidData PdkFile_Open iFd = %d\n", iFd);
+	#endif
+	if(iFd < 0)
+	{
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassAidData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("GetPayPassAidData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = stRecord[iIndex].iStartPos + iAidIndex*iSize;
+	//ComDebugTx("GetPayPassAidData iLseek = %d\n", iLseek);
+	//iRet = PdkFile_Seek (iFd, iBaseOffset, SEEK_CUR);
+	iRet = PdkFile_Seek (iFd, iLseek, SEEK_SET);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassAidData PdkFile_Seek iPos PdkFile_Seek = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetPayPassAidData PdkFile_Seek PdkFile_Seek = %d\n", iRet);
+		#endif
+		return iRet;
+	} 	
+	
+	
+		
+	iRet = PdkFile_Read(iFd, (uchar*)pstPayPassAidNode, iSize);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetAidData PdkFile_Read iRet = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetAidData PdkFile_Read iRet = %d\n", iRet);
+		#endif
+		return iRet;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassAidData---- stAidNode.SelFlag = %d \n", pstPayPassAidNode->ucSelFlag);
+	AppHexLog("GetPayPassAidData---- stAidNode.AID = \n", pstPayPassAidNode->aucAID, sizeof(pstPayPassAidNode->aucAID));
+	ComDebugTx("GetPayPassAidDatat---- stAidNode.IfUseLocalName = %d \n", pstPayPassAidNode->ucIfUseLocalName);
+	ComDebugTx("GetPayPassAidData---- stAidNode.AppName = %s \n", pstPayPassAidNode->aucAppName);
+	AppHexLog("GetPayPassAidData---- stAidNode.Version = \n", pstPayPassAidNode->aucVersion, sizeof(pstPayPassAidNode->aucVersion));
+	AppHexLog("GetPayPassAidData---- stAidNode.aucMagAppVersion = \n", pstPayPassAidNode->aucMagAppVersion, sizeof(pstPayPassAidNode->aucMagAppVersion));
+	AppHexLog("GetPayPassAidData---- stAidNode.TACDenial  \n", pstPayPassAidNode->aucTACDenial, sizeof(pstPayPassAidNode->aucTACDenial));
+	AppHexLog("GetPayPassAidData---- stAidNode.TACOnline = \n", pstPayPassAidNode->aucTACOnline, sizeof(pstPayPassAidNode->aucTACOnline));
+	AppHexLog("GetPayPassAidData---- stAidNode.TACDefault = \n", pstPayPassAidNode->aucTACDefault, sizeof(pstPayPassAidNode->aucTACDefault));
+	ComDebugTx("GetPayPassAidData---- stAidNode.ulClssFloorLimit = %d \n", pstPayPassAidNode->ulClssFloorLimit);
+	AppHexLog("GetPayPassAidData---- stAidNode.aucTermRisk = \n", pstPayPassAidNode->aucTermRisk, sizeof(pstPayPassAidNode->aucTermRisk));
+	AppHexLog("GetPayPassAidData---- stAidNode.aucTxnLmt_NoOnDevice = \n", pstPayPassAidNode->aucTxnLmt_NoOnDevice, sizeof(pstPayPassAidNode->aucTxnLmt_NoOnDevice));
+	AppHexLog("GetPayPassAidData---- stAidNode.aucTxnLmt_OnDevice = \n", pstPayPassAidNode->aucTxnLmt_OnDevice, sizeof(pstPayPassAidNode->aucTxnLmt_OnDevice));
+	AppHexLog("GetPayPassAidData---- stAidNode.aucRDCVMLmt = \n", pstPayPassAidNode->aucRDCVMLmt, sizeof(pstPayPassAidNode->aucRDCVMLmt));
+	#endif
+
+	PdkFile_Close(iFd);
+
+	return 0;
+}
+
+#ifdef CLSS_TEST
+int TestGetPayPassAid()
+{
+	int iRet = 0;
+	int i = 0;
+	int iNum = 0;
+	PAYPASS_AID_NODE_T stPayPassAidNode = {0};
+
+	iNum = ClssGetNodeNum(CLSS_PAYPASS_AID_NODE);
+	if(iNum < 0)
+	{
+		ComDebugTx("TestGetPayPassAid iNum = %d\n", iNum);
+		return iNum;
+	}
+	ComDebugTx("TestGetPayPassAid iNum = %d\n", iNum);
+
+	for(i = 0; i < iNum; i++)
+	{
+		memset(&stPayPassAidNode, 0, sizeof(stPayPassAidNode));
+		iRet = GetPayPassAidData(&stPayPassAidNode, sizeof(stPayPassAidNode), i);
+		if(iRet < 0)
+		{
+			ComDebugTx("TestGetPayPassAid GetPayPassAidData iRet = %d i = %d\n", iRet,i);
+			return iRet;
+		}
+	}
+	return 0;
+}
+#endif
+
+int GetPayPassConfData(PAYPASS_CONF_T *pstPayPassConfNode, int iSize, int iConfIndex) 
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iRet = 0;
+	int i = 0;
+	int iBaseOffset = 0;
+	int iOffset = 0;
+	int iIndex = 0;
+	int iLseek = 0 ;
+
+	NODE_RECORD_T stRecord[CLSS_PRASED_RECORD_MAX_NODE_CNT] = {0};
+
+	iRet = ClssGetRecordData(stRecord, sizeof(stRecord));
+	if(iRet < 0)
+	{
+		ComDebugTx("GetPayPassConfData ClssGetRecordData iRet = %d\n",iRet);
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("PAYPASS_PAYPASSCONFIGURATION", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassConfData GetRecordIndex iIndex = %d \n", iIndex);
+	#endif
+	if(iIndex < 0)
+	{
+		return iIndex;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassConfData GetRecordData stRecord[%d].iStartPos = %d\n",iIndex,stRecord[iIndex].iStartPos);
+	ComDebugTx("GetPayPassConfData GetRecordData stRecord[%d].count = %d\n",iIndex,stRecord[iIndex].count);
+	ComDebugTx("GetPayPassConfData GetRecordData stRecord[%d].ucListNodeName = %s\n",iIndex,stRecord[iIndex].ucListNodeName);
+	#endif
+
+	if(iConfIndex > stRecord[iIndex].count)
+	{
+		return CLSS_XML_FILE_OP_ERR_AID_OVER_FLOW;
+	}
+	
+	iFd = PdkFile_Open(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassConfData PdkFile_Open iFd = %d\n", iFd);
+	#endif
+	if(iFd < 0)
+	{
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassConfData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("GetPayPassConfData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = stRecord[iIndex].iStartPos + iConfIndex*iSize;
+	//ComDebugTx("GetPayPassConfData iLseek = %d\n", iLseek);
+	//iRet = PdkFile_Seek (iFd, iBaseOffset, SEEK_CUR);
+	iRet = PdkFile_Seek (iFd, iLseek, SEEK_SET);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassConfData PdkFile_Seek iPos PdkFile_Seek = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetPayPassConfData PdkFile_Seek PdkFile_Seek = %d\n", iRet);
+		#endif
+		return iRet;
+	} 	
+	
+	
+		
+	iRet = PdkFile_Read(iFd, (uchar*)pstPayPassConfNode, iSize);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassConfData PdkFile_Read iRet = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetPayPassConfData PdkFile_Read iRet = %d\n", iRet);
+		#endif
+		return iRet;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucKernelConf = \n", &(pstPayPassConfNode->ucKernelConf), sizeof(pstPayPassConfNode->ucKernelConf));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucTornLeftTime = \n", &(pstPayPassConfNode->ucTornLeftTime), sizeof(pstPayPassConfNode->ucTornLeftTime));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucMaximumTornNumber = \n", &(pstPayPassConfNode->ucMaximumTornNumber), sizeof(pstPayPassConfNode->ucMaximumTornNumber));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucMagneticCVM = \n", &(pstPayPassConfNode->ucMagneticCVM), sizeof(pstPayPassConfNode->ucMagneticCVM));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucMageticNoCVM = \n", &(pstPayPassConfNode->ucMageticNoCVM), sizeof(pstPayPassConfNode->ucMageticNoCVM));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucMobileSupport = \n", &(pstPayPassConfNode->ucMobileSupport), sizeof(pstPayPassConfNode->ucMobileSupport));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucCardDataInput = \n", &(pstPayPassConfNode->ucCardDataInput), sizeof(pstPayPassConfNode->ucCardDataInput));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucCVMCapability_CVMRequired = \n", &(pstPayPassConfNode->ucCVMCapability_CVMRequired), sizeof(pstPayPassConfNode->ucCVMCapability_CVMRequired));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucCVMCapability_NoCVMRequired = \n", &(pstPayPassConfNode->ucCVMCapability_NoCVMRequired), sizeof(pstPayPassConfNode->ucCVMCapability_NoCVMRequired));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucTerminalType = \n", &(pstPayPassConfNode->ucTerminalType), sizeof(pstPayPassConfNode->ucTerminalType));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucAccoutType = \n", &(pstPayPassConfNode->ucAccoutType), sizeof(pstPayPassConfNode->ucAccoutType));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.aucAdditionalTerminalCapability = \n", pstPayPassConfNode->aucAdditionalTerminalCapability, sizeof(pstPayPassConfNode->aucAdditionalTerminalCapability));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucKernelID = \n", &(pstPayPassConfNode->ucKernelID), sizeof(pstPayPassConfNode->ucKernelID));
+	AppHexLog("GetPayPassConfData ---- pstConfNode.ucSecurityCapability = \n", &(pstPayPassConfNode->ucSecurityCapability), sizeof(pstPayPassConfNode->ucSecurityCapability));
+	#endif
+
+	PdkFile_Close(iFd);
+
+	return 0;
+}
+
+#ifdef CLSS_TEST
+int TestGetPayPassConf()
+{
+	int iRet = 0;
+	int i = 0;
+	int iNum = 0;
+	PAYPASS_CONF_T stPayPassConfNode = {0};
+
+	iNum = ClssGetNodeNum(CLSS_PAYPASS_CONF_NODE);
+	ComDebugTx("TestGetPayPassConf iNum = %d\n", iNum);
+	if(iNum < 0)
+	{
+		ComDebugTx("TestGetPayPassConf iNum = %d\n", iNum);
+		return iNum;
+	}
+
+	for(i = 0; i < iNum; i++)
+	{
+		memset(&stPayPassConfNode, 0, sizeof(stPayPassConfNode));
+		iRet = GetPayPassConfData(&stPayPassConfNode, sizeof(stPayPassConfNode), i);
+		if(iRet < 0)
+		{
+			ComDebugTx("TestGetPayPassConf GetPayPassConfData iRet = %d i = %d\n", iRet,i);
+			return iRet;
+		}
+	}
+	return 0;
+}
+#endif
+
+int GetPayWaveAidData(PAYWAVE_AID_NODE_T *pstPayWaveAidNode, int iSize, int iPayWaveAidIndex)
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iRet = 0;
+	int i = 0;
+	int iBaseOffset = 0;
+	int iOffset = 0;
+	int iIndex = 0;
+	int iLseek = 0 ;
+
+	NODE_RECORD_T stRecord[CLSS_PRASED_RECORD_MAX_NODE_CNT] = {0};
+
+	iRet = ClssGetRecordData(stRecord, sizeof(stRecord));
+	if(iRet < 0)
+	{
+		ComDebugTx("GetPayWaveAidData ClssGetRecordData iRet = %d\n",iRet);
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("PAYWAVE_AID", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveAidData GetRecordIndex iIndex = %d \n", iIndex);
+	#endif
+	if(iIndex < 0)
+	{
+		return iIndex;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveAidData GetRecordData stRecord[%d].iStartPos = %d\n",iIndex,stRecord[iIndex].iStartPos);
+	ComDebugTx("GetPayWaveAidData GetRecordData stRecord[%d].count = %d\n",iIndex,stRecord[iIndex].count);
+	ComDebugTx("GetPayWaveAidData GetRecordData stRecord[%d].ucListNodeName = %s\n",iIndex,stRecord[iIndex].ucListNodeName);
+	#endif
+
+	if(iPayWaveAidIndex > stRecord[iIndex].count)
+	{
+		return CLSS_XML_FILE_OP_ERR_AID_OVER_FLOW;
+	}
+	
+	iFd = PdkFile_Open(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveAidData PdkFile_Open iFd = %d\n", iFd);
+	#endif
+	if(iFd < 0)
+	{
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveAidData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("GetPayWaveAidData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = stRecord[iIndex].iStartPos + iPayWaveAidIndex*iSize;
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveAidData iLseek = %d\n", iLseek);
+	#endif
+	//iRet = PdkFile_Seek (iFd, iBaseOffset, SEEK_CUR);
+	iRet = PdkFile_Seek (iFd, iLseek, SEEK_SET);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveAidData PdkFile_Seek iPos PdkFile_Seek = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetPayWaveAidData PdkFile_Seek PdkFile_Seek = %d\n", iRet);
+		#endif
+		return iRet;
+	} 	
+	
+	
+		
+	iRet = PdkFile_Read(iFd, (uchar*)pstPayWaveAidNode, iSize);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveAidData PdkFile_Read iRet = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetPayWaveAidData PdkFile_Read iRet = %d\n", iRet);
+		#endif
+		return iRet;
+	}
+
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveAidData ---- stAidNode.ucSelFlag = %d \n", pstPayWaveAidNode->ucSelFlag);
+	AppHexLog("GetPayWaveAidData ---- stAidNode.aucAID = \n", pstPayWaveAidNode->aucAID, sizeof(pstPayWaveAidNode->aucAID));
+	ComDebugTx("GetPayWaveAidData ---- stAidNode.ucIfUseLocalName = %d \n", pstPayWaveAidNode->ucIfUseLocalName);
+	ComDebugTx("GetPayWaveAidData ---- stAidNode.aucAppName = %s \n", pstPayWaveAidNode->aucAppName);
+	AppHexLog("GetPayWaveAidData ---- stAidNode.aucAppVersion = \n", pstPayWaveAidNode->aucAppVersion, sizeof(pstPayWaveAidNode->aucAppVersion));
+	AppHexLog("GetPayWaveAidData ---- stAidNode.ucCrypto17Flg = \n", &(pstPayWaveAidNode->ucCrypto17Flg), sizeof(pstPayWaveAidNode->ucCrypto17Flg));
+	AppHexLog("GetPayWaveAidData ---- stAidNode.ucZeroAmtNoAllowed  \n", &(pstPayWaveAidNode->ucZeroAmtNoAllowed), sizeof(pstPayWaveAidNode->ucZeroAmtNoAllowed));
+	AppHexLog("GetPayWaveAidData ---- stAidNode.ucStatusCheckFlg = \n", &(pstPayWaveAidNode->ucStatusCheckFlg), sizeof(pstPayWaveAidNode->ucStatusCheckFlg));
+	AppHexLog("GetPayWaveAidData ---- stAidNode.aucReaderTTQ = \n", pstPayWaveAidNode->aucReaderTTQ, sizeof(pstPayWaveAidNode->aucReaderTTQ));
+	#endif
+
+	for(i = 0; i < MAX_TRANSTYPE_NUM; i++)
+	{
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetPayWaveAidData ParseInterWare---- i = %d \n", i);
+		AppHexLog("GetPayWaveAidData ParseInterWare---- stAidNode.ucTransType = \n", &(pstPayWaveAidNode->stFlmtByTransType[i].ucTransType), sizeof(pstPayWaveAidNode->stFlmtByTransType[i].ucTransType));
+		ComDebugTx("GetPayWaveAidData ParseInterWare---- stAidNode.ucTermFLmtFlg = %d \n", pstPayWaveAidNode->stFlmtByTransType[i].ucTermFLmtFlg);
+		ComDebugTx("GetPayWaveAidData ParseInterWare---- stAidNode.ucRdClssTxnLmtFlg = %d \n", pstPayWaveAidNode->stFlmtByTransType[i].ucRdClssTxnLmtFlg);
+		ComDebugTx("GetPayWaveAidData ParseInterWare---- stAidNode.ucRdCVMLmtFlg = %d \n", pstPayWaveAidNode->stFlmtByTransType[i].ucRdCVMLmtFlg);
+		ComDebugTx("GetPayWaveAidData ParseInterWare---- stAidNode.ucRdClssFLmtFlg = %d \n", pstPayWaveAidNode->stFlmtByTransType[i].ucRdClssFLmtFlg);
+		ComDebugTx("GetPayWaveAidData ParseInterWare---- stAidNode.aucTermFLmt = %d\n", pstPayWaveAidNode->stFlmtByTransType[i].ulTermFLmt);
+		ComDebugTx("GetPayWaveAidData ParseInterWare---- stAidNode.aucRdClssTxnLmt = %d \n", pstPayWaveAidNode->stFlmtByTransType[i].ulcRdClssTxnLmt);
+		ComDebugTx("GetPayWaveAidData ParseInterWare---- stAidNode.aucRdCVMLmt  %d\n", pstPayWaveAidNode->stFlmtByTransType[i].ulRdCVMLmt);
+		ComDebugTx("GetPayWaveAidData ParseInterWare---- stAidNode.aucRdClssFLmt = %d\n", pstPayWaveAidNode->stFlmtByTransType[i].ulRdClssFLmt);
+		#endif
+	}
+
+	PdkFile_Close(iFd);
+
+	return 0;
+}
+
+#ifdef CLSS_TEST
+int TestGetPayWaveAid()
+{
+	int iRet = 0;
+	int i = 0;
+	int iNum = 0;
+	PAYWAVE_AID_NODE_T stPayWaviAidNode = {0};
+
+	iNum = ClssGetNodeNum(CLSS_PAYWAVE_AID_NODE);
+	ComDebugTx("TestGetPayWaveAid iNum = %d\n", iNum);
+	if(iNum < 0)
+	{
+		ComDebugTx("TestGetPayWaveAid iNum = %d\n", iNum);
+		return iNum;
+	}
+
+	for(i = 0; i < iNum; i++)
+	{
+		memset(&stPayWaviAidNode, 0, sizeof(stPayWaviAidNode));
+		iRet = GetPayWaveAidData(&stPayWaviAidNode, sizeof(stPayWaviAidNode), i);
+		if(iRet < 0)
+		{
+			ComDebugTx("TestGetPayWaveAid GetPayWaveAidData iRet = %d i = %d\n", iRet,i);
+			return iRet;
+		}
+	}
+	return 0;
+}
+#endif
+
+
+int GetPayWaveProgramIdData(PAYWAVE_PROGREAM_ID_NODE_T *pstPayWavePrgIdNode, int iSize, int iPrgIdIndex)
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iRet = 0;
+	int i = 0;
+	int iBaseOffset = 0;
+	int iOffset = 0;
+	int iIndex = 0;
+	int iLseek = 0 ;
+
+	NODE_RECORD_T stRecord[CLSS_PRASED_RECORD_MAX_NODE_CNT] = {0};
+
+	iRet = ClssGetRecordData(stRecord, sizeof(stRecord));
+	if(iRet < 0)
+	{
+		ComDebugTx("GetPayWaveProgramIdData ClssGetRecordData iRet = %d\n",iRet);
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("PAYWAVE_PROGRAMID", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveProgramIdData GetRecordIndex iIndex = %d \n", iIndex);
+	#endif
+	if(iIndex < 0)
+	{
+		return iIndex;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveProgramIdData GetRecordData stRecord[%d].iStartPos = %d\n",iIndex,stRecord[iIndex].iStartPos);
+	ComDebugTx("GetPayWaveProgramIdData GetRecordData stRecord[%d].count = %d\n",iIndex,stRecord[iIndex].count);
+	ComDebugTx("GetPayWaveProgramIdData GetRecordData stRecord[%d].ucListNodeName = %s\n",iIndex,stRecord[iIndex].ucListNodeName);
+	#endif
+
+	if(iPrgIdIndex > stRecord[iIndex].count)
+	{
+		return CLSS_XML_FILE_OP_ERR_AID_OVER_FLOW;
+	}
+	
+	iFd = PdkFile_Open(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassAidData PdkFile_Open iFd = %d\n", iFd);
+	#endif
+	if(iFd < 0)
+	{
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassAidData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("GetPayPassAidData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = stRecord[iIndex].iStartPos + iPrgIdIndex*iSize;
+	//ComDebugTx("GetPayPassAidData iLseek = %d\n", iLseek);
+	//iRet = PdkFile_Seek (iFd, iBaseOffset, SEEK_CUR);
+	iRet = PdkFile_Seek (iFd, iLseek, SEEK_SET);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayPassAidData PdkFile_Seek iPos PdkFile_Seek = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetPayPassAidData PdkFile_Seek PdkFile_Seek = %d\n", iRet);
+		#endif
+		return iRet;
+	} 	
+	
+	
+		
+	iRet = PdkFile_Read(iFd, (uchar*)pstPayWavePrgIdNode, iSize);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetAidData PdkFile_Read iRet = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetAidData PdkFile_Read iRet = %d\n", iRet);
+		#endif
+		return iRet;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppHexLog("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.aucProgramId = \n", pstPayWavePrgIdNode->aucProgramId, sizeof(pstPayWavePrgIdNode->aucProgramId));
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ucPrgramIdLen = %d \n", pstPayWavePrgIdNode->ucPrgramIdLen);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ulTerminalFloorLimit = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ulTermFLmt);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ulContactlessCVMLimit = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ulRdCVMLmt);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ulContactlessTransactionLimit = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ulRdClssTxnLmt);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ulContactlessFloorLimit = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ulRdClssFLmt);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ucTerminalFloorLimitSupported = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ucTermFLmtFlg);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ucContactlessTransactionLimitSupported = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ucRdClssTxnLmtFlg);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ucCVMLimitSupported = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ucRdCVMLmtFlg);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ucContactlessFloorLimitSupported = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ucRdClssFLmtFlg);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ucCryptogramVersion17Supported = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ucCrypto17Flg);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ucZeroAmountNoAllowed = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ucZeroAmtNoAllowed);
+	ComDebugTx("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.ucStatusCheckSupported = %d \n", pstPayWavePrgIdNode->tPreProcDRL.ucStatusCheckFlg);	
+	AppHexLog("GetPayWaveProgramIdData ---- pstPayWavePrgIdNode.aucReaderTTQ = \n", pstPayWavePrgIdNode->tPreProcDRL.aucReaderTTQ, sizeof(pstPayWavePrgIdNode->tPreProcDRL.aucReaderTTQ));
+	#endif
+
+	PdkFile_Close(iFd);
+
+	return 0;
+}
+
+#ifdef CLSS_TEST
+int TestGetPayWavePrgId()
+{
+	int iRet = 0;
+	int i = 0;
+	int iNum = 0;
+	PAYWAVE_PROGREAM_ID_NODE_T stPayWavePrgIdNode = {0};
+
+	iNum = ClssGetNodeNum(CLSS_PAYWAVE_PROGRAM_ID_NODE);
+	ComDebugTx("TestGetPayWavePrgId iNum = %d\n", iNum);
+	if(iNum < 0)
+	{
+		ComDebugTx("TestGetPayWavePrgId iRet = %d\n", iNum);
+		return iNum;
+	}
+
+	for(i = 0; i < iNum; i++)
+	{
+		memset(&stPayWavePrgIdNode, 0, sizeof(stPayWavePrgIdNode));
+		iRet = GetPayWaveProgramIdData(&stPayWavePrgIdNode, sizeof(stPayWavePrgIdNode), i);
+		if(iRet < 0)
+		{
+			ComDebugTx("TestGetPayWavePrgId GetPayWaveProgramIdData iRet = %d i = %d\n", iRet,i);
+			return iRet;
+		}
+	}
+	return 0;
+}
+#endif
+
+int GetPayWaveTermCapData(PAYWAVE_TERM_CAPABILITY_NODE_T *pstPayWaveTermCapNode, int iSize, int iTermCapIndex)
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iRet = 0;
+	int i = 0;
+	int iBaseOffset = 0;
+	int iOffset = 0;
+	int iIndex = 0;
+	int iLseek = 0 ;
+
+	NODE_RECORD_T stRecord[CLSS_PRASED_RECORD_MAX_NODE_CNT] = {0};
+
+	iRet = ClssGetRecordData(stRecord, sizeof(stRecord));
+	if(iRet < 0)
+	{
+		ComDebugTx("GetPayWaveTermCapData ClssGetRecordData iRet = %d\n",iRet);
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("PAYWAVE_TERM_CAP", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveTermCapData GetRecordIndex iIndex = %d \n", iIndex);
+	#endif
+	if(iIndex < 0)
+	{
+		return iIndex;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveTermCapData GetRecordData stRecord[%d].iStartPos = %d\n",iIndex,stRecord[iIndex].iStartPos);
+	ComDebugTx("GetPayWaveTermCapData GetRecordData stRecord[%d].count = %d\n",iIndex,stRecord[iIndex].count);
+	ComDebugTx("GetPayWaveTermCapData GetRecordData stRecord[%d].ucListNodeName = %s\n",iIndex,stRecord[iIndex].ucListNodeName);
+	#endif
+
+	if(iTermCapIndex > stRecord[iIndex].count)
+	{
+		return CLSS_XML_FILE_OP_ERR_AID_OVER_FLOW;
+	}
+	
+	iFd = PdkFile_Open(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveTermCapData PdkFile_Open iFd = %d\n", iFd);
+	#endif
+	if(iFd < 0)
+	{
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveTermCapData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("GetPayWaveTermCapData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = stRecord[iIndex].iStartPos + iTermCapIndex*iSize;
+	//ComDebugTx("GetPayWaveTermCapData iLseek = %d\n", iLseek);
+	//iRet = PdkFile_Seek (iFd, iBaseOffset, SEEK_CUR);
+	iRet = PdkFile_Seek (iFd, iLseek, SEEK_SET);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveTermCapData PdkFile_Seek iPos PdkFile_Seek = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetPayWaveTermCapData PdkFile_Seek PdkFile_Seek = %d\n", iRet);
+		#endif
+		return iRet;
+	} 	
+	
+	
+		
+	iRet = PdkFile_Read(iFd, (uchar*)pstPayWaveTermCapNode, iSize);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetPayWaveTermCapData PdkFile_Read iRet = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetAidData PdkFile_Read iRet = %d\n", iRet);
+		#endif
+		return iRet;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppHexLog("GetPayWaveTermCapData ---- pstPayWaveTermCapNode.ucTermType = \n", &(pstPayWaveTermCapNode->ucTermType), sizeof(pstPayWaveTermCapNode->ucTermType));
+	AppHexLog("GetPayWaveTermCapData ---- pstPayWaveTermCapNode.ucCardDataInput = \n", &(pstPayWaveTermCapNode->ucCardDataInput), sizeof(pstPayWaveTermCapNode->ucCardDataInput));
+	AppHexLog("GetPayWaveTermCapData ---- pstPayWaveTermCapNode.ucCVMSupport = \n", &(pstPayWaveTermCapNode->ucCVMSupport), sizeof(pstPayWaveTermCapNode->ucCVMSupport));
+	AppHexLog("GetPayWaveTermCapData ---- pstPayWaveTermCapNode.ucOffDataAuth = \n", &(pstPayWaveTermCapNode->ucOffDataAuth), sizeof(pstPayWaveTermCapNode->ucOffDataAuth));
+	AppHexLog("GetPayWaveTermCapData ---- pstPayWaveTermCapNode.ucTransTypeCapa = \n", &(pstPayWaveTermCapNode->ucTransTypeCapa), sizeof(pstPayWaveTermCapNode->ucTransTypeCapa));
+	AppHexLog("GetPayWaveTermCapData ---- pstPayWaveTermCapNode.ucTermInput = \n", &(pstPayWaveTermCapNode->ucTermInput), sizeof(pstPayWaveTermCapNode->ucTermInput));
+	AppHexLog("GetPayWaveTermCapData ---- pstPayWaveTermCapNode.ucTermOutput = \n", &(pstPayWaveTermCapNode->ucTermOutput), sizeof(pstPayWaveTermCapNode->ucTermOutput));
+	#endif
+
+	PdkFile_Close(iFd);
+
+	return 0;
+}
+
+#ifdef CLSS_TEST
+int TestGetPayWaveTermCap()
+{
+	int iRet = 0;
+	int i = 0;
+	int iNum = 0;
+	PAYWAVE_TERM_CAPABILITY_NODE_T stPayWaveTermCapNode = {0};
+
+	iNum  = ClssGetNodeNum(CLSS_PAYWAVE_TERM_CAP_NODE);
+	ComDebugTx("TestGetPayWavePrgId iNum = %d\n", iNum);
+	if(iNum < 0)
+	{
+		ComDebugTx("TestGetPayWaveTermCap iNum = %d\n", iNum);
+		return iNum;
+	}
+
+	for(i = 0; i < iNum; i++)
+	{
+		memset(&stPayWaveTermCapNode, 0, sizeof(stPayWaveTermCapNode));
+		iRet = GetPayWaveTermCapData(&stPayWaveTermCapNode, sizeof(stPayWaveTermCapNode), i);
+		if(iRet < 0)
+		{
+			ComDebugTx("TestGetPayWaveTermCap GetPayWaveTermCapData iRet = %d i = %d\n", iRet,i);
+			return iRet;
+		}
+	}
+	return 0;
+}
+#endif
+
+
+int GetClssOtherCofData(CLSS_OTHER_CONF_NODE_T *pstOtherConfNode, int iSize, int iOtherCofIndex)
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iRet = 0;
+	int i = 0;
+	int iBaseOffset = 0;
+	int iOffset = 0;
+	int iIndex = 0;
+	int iLseek = 0 ;
+
+	NODE_RECORD_T stRecord[CLSS_PRASED_RECORD_MAX_NODE_CNT] = {0};
+
+	iRet = ClssGetRecordData(stRecord, sizeof(stRecord));
+	if(iRet < 0)
+	{
+		ComDebugTx("GetClssOtherCofData ClssGetRecordData iRet = %d\n",iRet);
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("CLSS_OHTER_CONF", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetClssOtherCofData GetRecordIndex iIndex = %d \n", iIndex);
+	#endif
+	if(iIndex < 0)
+	{
+		return iIndex;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetClssOtherCofData GetRecordData stRecord[%d].iStartPos = %d\n",iIndex,stRecord[iIndex].iStartPos);
+	ComDebugTx("GetClssOtherCofData GetRecordData stRecord[%d].count = %d\n",iIndex,stRecord[iIndex].count);
+	ComDebugTx("GetClssOtherCofData GetRecordData stRecord[%d].ucListNodeName = %s\n",iIndex,stRecord[iIndex].ucListNodeName);
+	#endif
+
+	if(iOtherCofIndex > stRecord[iIndex].count)
+	{
+		return CLSS_XML_FILE_OP_ERR_AID_OVER_FLOW;
+	}
+	
+	iFd = PdkFile_Open(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetClssOtherCofData PdkFile_Open iFd = %d\n", iFd);
+	#endif
+	if(iFd < 0)
+	{
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(CLSS_XML_FILE_HAVE_PARSED);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetClssOtherCofData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("GetClssOtherCofData PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = stRecord[iIndex].iStartPos + iOtherCofIndex*iSize;
+	//ComDebugTx("GetClssOtherCofData iLseek = %d\n", iLseek);
+	//iRet = PdkFile_Seek (iFd, iBaseOffset, SEEK_CUR);
+	iRet = PdkFile_Seek (iFd, iLseek, SEEK_SET);
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetClssOtherCofData PdkFile_Seek iPos PdkFile_Seek = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetClssOtherCofData PdkFile_Seek PdkFile_Seek = %d\n", iRet);
+		#endif
+		return iRet;
+	} 	
+	
+	
+		
+	iRet = PdkFile_Read(iFd, (uchar*)pstOtherConfNode, iSize);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("GetClssOtherCofData PdkFile_Read iRet = %d\n", iRet);
+	#endif
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("GetClssOtherCofData PdkFile_Read iRet = %d\n", iRet);
+		#endif
+		return iRet;
+	}
+
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppHexLog("GetClssOtherCofData ---- pstOtherConfNode.aucCountryCode = \n", pstOtherConfNode->aucCountryCode, sizeof(pstOtherConfNode->aucCountryCode));
+	AppHexLog("GetClssOtherCofData ---- pstOtherConfNode.aucCurrencyCode = \n", pstOtherConfNode->aucCurrencyCode, sizeof(pstOtherConfNode->aucCurrencyCode));
+	AppHexLog("GetClssOtherCofData ---- pstOtherConfNode.aucRefCurrencyCode = \n", pstOtherConfNode->aucRefCurrencyCode, sizeof(pstOtherConfNode->aucRefCurrencyCode));
+
+	ComDebugTx("GetClssOtherCofData ---- pstOtherConfNode->pstOtherConfNode = %d \n", pstOtherConfNode->ucCurrencyExponent);	
+	ComDebugTx("GetClssOtherCofData  pstOtherConfNode->ucRefCurrencyExponent = %d \n", pstOtherConfNode->ucRefCurrencyExponent);
+	
+	AppHexLog("GetClssOtherCofData ---- pstOtherConfNode.aucRefCurrenceConVerRate = \n", pstOtherConfNode->aucRefCurrenceConVerRate, sizeof(pstOtherConfNode->aucRefCurrenceConVerRate));
+	AppHexLog("GetClssOtherCofData ---- pstOtherConfNode.ucTransTypeCapa = \n", pstOtherConfNode->aucMerchantCateCode, sizeof(pstOtherConfNode->aucMerchantCateCode));
+	
+	ComDebugTx("GetClssOtherCofData ---- giPayWaveTermCapIndex = %s \n", pstOtherConfNode->aucMerchantId);	
+	ComDebugTx("GetClssOtherCofData  pstOtherConfNode->aucTerminalId = %s \n", pstOtherConfNode->aucTerminalId);
+	ComDebugTx("GetClssOtherCofData ---- pstOtherConfNode->aucMerChantName = %s \n", pstOtherConfNode->aucMerChantName);	
+	ComDebugTx("GetClssOtherCofData  pstOtherConfNode->aucMerChantLocalAddr = %s \n", pstOtherConfNode->aucMerChantLocalAddr);
+	#endif
+
+	PdkFile_Close(iFd);
+
+	return 0;
+}
+
+#ifdef CLSS_TEST
+int TestGetOherConf()
+{
+	int iRet = 0;
+	int i = 0;
+	int iNum = 0;
+	CLSS_OTHER_CONF_NODE_T stClssOtherConfNode = {0};
+
+	iNum = ClssGetNodeNum(CLSS_OTHER_CONF_NODE);
+	ComDebugTx("TestGetOherConf iNum = %d\n", iNum);
+	if(iNum < 0)
+	{
+		ComDebugTx("TestGetOherConf iNum = %d\n", iNum);
+		return iNum;
+	}
+
+	for(i = 0; i < iNum; i++)
+	{
+		memset(&stClssOtherConfNode, 0, sizeof(stClssOtherConfNode));
+		iRet = GetClssOtherCofData(&stClssOtherConfNode, sizeof(stClssOtherConfNode), i);
+		if(iRet < 0)
+		{
+			ComDebugTx("TestGetOherConf GetClssOtherCofData iRet = %d i = %d\n", iRet,i);
+			return iRet;
+		}
+	}
+	return 0;
+}
+#endif
+
+static int PrintNodeStruct(const uchar *pucNodeName, int iClssType, void *data, int iLen)
+{
+	int iOffset = 0;
+	int iBaseOffset = 0;
+	//NODE_RECORD_T stRecord[EMV_PRASED_NODE_CNT] = {0};
+	int iRet = 0;
+	int iSaveLen = 0;
+	int i = 0;
+
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("PrintNodeStruct---- iBaseOffset = %d \n", iBaseOffset);
+#endif
+
+	if((strcmp(pucNodeName, "<AID>") == 0) && (iClssType ==CLSS_PAYPASS))
+	{
+		PAYPASS_AID_NODE_T *stAidNode = NULL;
+		stAidNode = (PAYPASS_AID_NODE_T *)data;
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("PrintNodeStruct ParsePayPassAidList---- stAidNode.SelFlag = %d \n", stAidNode->ucSelFlag);
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.AID = \n", stAidNode->aucAID, sizeof(stAidNode->aucAID));
+		ComDebugTx("PrintNodeStruct ParsePayPassAidList---- stAidNode.ucAidLen = %d \n", stAidNode->ucAidLen);
+		ComDebugTx("PrintNodeStruct ParsePayPassAidList---- stAidNode.IfUseLocalName = %d \n", stAidNode->ucIfUseLocalName);
+		ComDebugTx("PrintNodeStruct ParsePayPassAidList---- stAidNode.AppName = %s \n", stAidNode->aucAppName);
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.Version = \n", stAidNode->aucVersion, sizeof(stAidNode->aucVersion));
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.aucMagAppVersion = \n", stAidNode->aucMagAppVersion, sizeof(stAidNode->aucMagAppVersion));
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.TACDenial  \n", stAidNode->aucTACDenial, sizeof(stAidNode->aucTACDenial));
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.TACOnline = \n", stAidNode->aucTACOnline, sizeof(stAidNode->aucTACOnline));
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.TACDefault = \n", stAidNode->aucTACDefault, sizeof(stAidNode->aucTACDefault));
+		ComDebugTx("PrintNodeStruct ParsePayPassAidList---- stAidNode.ulClssFloorLimit = %d \n", stAidNode->ulClssFloorLimit);
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.aucTermRisk = \n", stAidNode->aucTermRisk, sizeof(stAidNode->aucTermRisk));
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.aucTxnLmt_NoOnDevice = \n", stAidNode->aucTxnLmt_NoOnDevice, sizeof(stAidNode->aucTxnLmt_NoOnDevice));
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.aucTxnLmt_OnDevice = \n", stAidNode->aucTxnLmt_OnDevice, sizeof(stAidNode->aucTxnLmt_OnDevice));
+		AppHexLog("PrintNodeStruct ParsePayPassAidList---- stAidNode.aucRDCVMLmt = \n", stAidNode->aucRDCVMLmt, sizeof(stAidNode->aucRDCVMLmt));
+		ComDebugTx("PrintNodeStruct ParsePayPassAidList---- giAidIndex = %d \n", giAidIndex);
+		
+		ComDebugTx("PrintNodeStruct----ParsePayPassAidList giCurrentOffset = %d \n", giCurrentOffset);
+	#endif
+		iSaveLen = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)stAidNode, iLen, giCurrentOffset);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("PrintNodeStruct----ParsePayPassAidList SaveParsedDataToFile iRet = %d \n", iSaveLen);
+	#endif
+		if(iSaveLen < 0)
+		{
+			ComDebugTx("PrintNodeStruct----ParsePayPassAidList SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+			return iSaveLen;
+		}
+	
+		if(giAidIndex == 0)
+		{
+			iRet = ClssGetRecordIndex("PAYPASS_AID", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("PrintNodeStruct----ParsePayPassAidList ClssGetRecordIndex iRet = %d \n", iRet);
+		#endif
+			if(iRet < 0)
+			{
+				ComDebugTx("PrintNodeStruct----ParsePayPassAidList ClssGetRecordIndex iRet = %d \n", iRet);
+				return iRet;
+			}
+			gstNoeRecord[iRet].iStartPos = giCurrentOffset;
+		}
+		giCurrentOffset += iSaveLen;
+		giAidIndex++;
+	}
+	else if((strcmp(pucNodeName, "<PAYPASSCONFIGURATION>") == 0) && (iClssType ==CLSS_PAYPASS))
+	{
+		PAYPASS_CONF_T *pstConfNode = NULL;
+		pstConfNode = (PAYPASS_CONF_T *)data;
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucKernelConf = \n", &(pstConfNode->ucKernelConf), sizeof(pstConfNode->ucKernelConf));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucTornLeftTime = \n", &(pstConfNode->ucTornLeftTime), sizeof(pstConfNode->ucTornLeftTime));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucMaximumTornNumber = \n", &(pstConfNode->ucMaximumTornNumber), sizeof(pstConfNode->ucMaximumTornNumber));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucMagneticCVM = \n", &(pstConfNode->ucMagneticCVM), sizeof(pstConfNode->ucMagneticCVM));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucMageticNoCVM = \n", &(pstConfNode->ucMageticNoCVM), sizeof(pstConfNode->ucMageticNoCVM));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucMobileSupport = \n", &(pstConfNode->ucMobileSupport), sizeof(pstConfNode->ucMobileSupport));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucCardDataInput = \n", &(pstConfNode->ucCardDataInput), sizeof(pstConfNode->ucCardDataInput));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucCVMCapability_CVMRequired = \n", &(pstConfNode->ucCVMCapability_CVMRequired), sizeof(pstConfNode->ucCVMCapability_CVMRequired));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucCVMCapability_NoCVMRequired = \n", &(pstConfNode->ucCVMCapability_NoCVMRequired), sizeof(pstConfNode->ucCVMCapability_NoCVMRequired));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucTerminalType = \n", &(pstConfNode->ucTerminalType), sizeof(pstConfNode->ucTerminalType));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucAccoutType = \n", &(pstConfNode->ucAccoutType), sizeof(pstConfNode->ucAccoutType));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.aucAdditionalTerminalCapability = \n", pstConfNode->aucAdditionalTerminalCapability, sizeof(pstConfNode->aucAdditionalTerminalCapability));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucKernelID = \n", &(pstConfNode->ucKernelID), sizeof(pstConfNode->ucKernelID));
+		AppHexLog("PrintNodeStruct parsepaypassconf---- pstConfNode.ucSecurityCapability = \n", &(pstConfNode->ucSecurityCapability), sizeof(pstConfNode->ucSecurityCapability));
+		ComDebugTx("PrintNodeStructparsepaypassconf ----pstConfNode giCurrentOffset = %d \n", giPayPassConfIndex);
+		#endif
+
+		iSaveLen = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)pstConfNode, iLen, giCurrentOffset);
+		if(iSaveLen < 0)
+		{
+			ComDebugTx("PrintNodeStruct----PrintNodeStruct parsepaypassconf SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+			return iSaveLen;
+		}
+	
+
+		if(giPayPassConfIndex == 0)
+		{
+			iRet = ClssGetRecordIndex("PAYPASS_PAYPASSCONFIGURATION", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("PrintNodeStruct----stAidNode ClssGetRecordIndex iRet = %d \n", iRet);
+		#endif
+			if(iRet < 0)
+			{
+				return iRet;
+			}
+			gstNoeRecord[iRet].iStartPos = giCurrentOffset;
+		}
+		giCurrentOffset += iSaveLen;
+		giPayPassConfIndex++;
+	}
+	else if((strcmp(pucNodeName, "<AID>") == 0) && (iClssType ==CLSS_PAYWAVE))
+	{
+		PAYWAVE_AID_NODE_T *stAidNode = NULL;
+		stAidNode = (PAYWAVE_AID_NODE_T *)data;
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("PrintNodeStruct ParsePayWaveAid---- stAidNode.ucSelFlag = %d \n", stAidNode->ucSelFlag);
+		AppHexLog("PrintNodeStruct ParsePayWaveAid---- stAidNode.aucAID = \n", stAidNode->aucAID, sizeof(stAidNode->aucAID));
+		ComDebugTx("PrintNodeStruct ParsePayWaveAid---- stAidNode.ucAidLen = %d \n", stAidNode->ucAidLen);
+		ComDebugTx("PrintNodeStruct ParsePayWaveAid---- stAidNode.ucIfUseLocalName = %d \n", stAidNode->ucIfUseLocalName);
+		ComDebugTx("PrintNodeStruct ParsePayWaveAid---- stAidNode.aucAppName = %s \n", stAidNode->aucAppName);
+		AppHexLog("PrintNodeStruct ParsePayWaveAid---- stAidNode.aucAppVersion = \n", stAidNode->aucAppVersion, sizeof(stAidNode->aucAppVersion));
+		AppHexLog("PrintNodeStruct ParsePayWaveAid---- stAidNode.ucCrypto17Flg = \n", &(stAidNode->ucCrypto17Flg), sizeof(stAidNode->ucCrypto17Flg));
+		AppHexLog("PrintNodeStruct ParsePayWaveAid---- stAidNode.ucZeroAmtNoAllowed  \n", &(stAidNode->ucZeroAmtNoAllowed), sizeof(stAidNode->ucZeroAmtNoAllowed));
+		AppHexLog("PrintNodeStruct ParsePayWaveAid---- stAidNode.ucStatusCheckFlg = \n", &(stAidNode->ucStatusCheckFlg), sizeof(stAidNode->ucStatusCheckFlg));
+		AppHexLog("PrintNodeStruct ParsePayWaveAid---- stAidNode.aucReaderTTQ = \n", stAidNode->aucReaderTTQ, sizeof(stAidNode->aucReaderTTQ));
+		ComDebugTx("PrintNodeStruct ParsePayWaveAid---- giPayWaveAidIndex = %d \n", giPayWaveAidIndex);
+		ComDebugTx("PrintNodeStruct ParsePayWaveAid---- giPayWaveInterWareIndex = %d \n", giPayWaveInterWareIndex);
+
+		for(i = 0; i < giPayWaveInterWareIndex; i++)
+		{
+			ComDebugTx("PrintNodeStruct ParseInterWare---- i = %d \n", i);
+			AppHexLog("PrintNodeStruct ParseInterWare---- stAidNode.ucTransType = \n", &(stAidNode->stFlmtByTransType[i].ucTransType), sizeof(stAidNode->stFlmtByTransType[i].ucTransType));
+			ComDebugTx("PrintNodeStruct ParseInterWare---- stAidNode.ucTermFLmtFlg = %d \n", stAidNode->stFlmtByTransType[i].ucTermFLmtFlg);
+			ComDebugTx("PrintNodeStruct ParseInterWare---- stAidNode.ucRdClssTxnLmtFlg = %d \n", stAidNode->stFlmtByTransType[i].ucRdClssTxnLmtFlg);
+			ComDebugTx("PrintNodeStruct ParseInterWare---- stAidNode.ucRdCVMLmtFlg = %d \n", stAidNode->stFlmtByTransType[i].ucRdCVMLmtFlg);
+			ComDebugTx("PrintNodeStruct ParseInterWare---- stAidNode.ucRdClssFLmtFlg = %d \n", stAidNode->stFlmtByTransType[i].ucRdClssFLmtFlg);
+			ComDebugTx("PrintNodeStruct ParseInterWare---- stAidNode.aucTermFLmt = %d\n", stAidNode->stFlmtByTransType[i].ulTermFLmt);
+			ComDebugTx("PrintNodeStruct ParseInterWare---- stAidNode.aucRdClssTxnLmt = %d \n", stAidNode->stFlmtByTransType[i].ulcRdClssTxnLmt);
+			ComDebugTx("PrintNodeStruct ParseInterWare---- stAidNode.aucRdCVMLmt  %d\n", stAidNode->stFlmtByTransType[i].ulRdCVMLmt);
+			ComDebugTx("PrintNodeStruct ParseInterWare---- stAidNode.aucRdClssFLmt = %d\n", stAidNode->stFlmtByTransType[i].ulRdClssFLmt);
+		}
+		
+		ComDebugTx("PrintNodeStruct----ParsePayWaveAid giCurrentOffset = %d \n", giCurrentOffset);
+	#endif
+		iSaveLen = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)stAidNode, iLen, giCurrentOffset);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("PrintNodeStruct----ParsePayWaveAid SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+	#endif
+		if(iSaveLen < 0)
+		{
+			ComDebugTx("PrintNodeStruct----ParsePayWaveAid SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+			return iSaveLen;
+		}
+	
+		if(giPayWaveAidIndex == 0)
+		{
+			iRet = ClssGetRecordIndex("PAYWAVE_AID", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("PrintNodeStruct----ParsePayWaveAid ClssGetRecordIndex iRet = %d \n", iRet);
+		#endif
+			if(iRet < 0)
+			{
+				ComDebugTx("PrintNodeStruct----ParsePayWaveAid ClssGetRecordIndex iRet = %d \n", iRet);
+				return iRet;
+			}
+			gstNoeRecord[iRet].iStartPos = giCurrentOffset;
+		}
+		giCurrentOffset += iSaveLen;
+		giPayWaveAidIndex++;
+	}
+	else if((strcmp(pucNodeName, "<PROGRAMID>") == 0) && (iClssType ==CLSS_PAYWAVE))
+	{
+		PAYWAVE_PROGREAM_ID_NODE_T *pstPrgIdNode = NULL;
+		pstPrgIdNode = (PAYWAVE_PROGREAM_ID_NODE_T *)data;
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		AppHexLog("PrintNodeStruct ParsePrgid---- pstPrgIdNode.aucProgramId = \n", pstPrgIdNode->aucProgramId, sizeof(pstPrgIdNode->aucProgramId));
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode->ucPrgramIdLen = %d \n", pstPrgIdNode->ucPrgramIdLen);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ulTerminalFloorLimit = %d \n", pstPrgIdNode->tPreProcDRL.ulTermFLmt);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ulContactlessCVMLimit = %d \n", pstPrgIdNode->tPreProcDRL.ulRdCVMLmt);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ulContactlessTransactionLimit = %d \n", pstPrgIdNode->tPreProcDRL.ulRdClssTxnLmt);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ulContactlessFloorLimit = %d \n", pstPrgIdNode->tPreProcDRL.ulRdClssFLmt);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ucTerminalFloorLimitSupported = %d \n", pstPrgIdNode->tPreProcDRL.ucTermFLmtFlg);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ucContactlessTransactionLimitSupported = %d \n", pstPrgIdNode->tPreProcDRL.ucRdClssTxnLmtFlg);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ucCVMLimitSupported = %d \n", pstPrgIdNode->tPreProcDRL.ucRdCVMLmtFlg);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ucContactlessFloorLimitSupported = %d \n", pstPrgIdNode->tPreProcDRL.ucRdClssFLmtFlg);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ucCryptogramVersion17Supported = %d \n", pstPrgIdNode->tPreProcDRL.ucCrypto17Flg);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ucZeroAmountNoAllowed = %d \n", pstPrgIdNode->tPreProcDRL.ucZeroAmtNoAllowed);
+		ComDebugTx("PrintNodeStruct ParsePrgid---- pstPrgIdNode.ucStatusCheckSupported = %d \n", pstPrgIdNode->tPreProcDRL.ucStatusCheckFlg);	
+		AppHexLog("PrintNodeStruct ParsePrgid---- pstPrgIdNode.aucReaderTTQ = \n", pstPrgIdNode->tPreProcDRL.aucReaderTTQ, sizeof(pstPrgIdNode->tPreProcDRL.aucReaderTTQ));
+		ComDebugTx("PrintNodeStruct ParsePrgid---- giPayWavePrgIdIndex = %d \n", giPayWavePrgIdIndex);	
+		ComDebugTx("PrintNodeStruct----ParsePrgid giCurrentOffset = %d \n", giCurrentOffset);
+	#endif
+		iSaveLen = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)pstPrgIdNode, iLen, giCurrentOffset);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("PrintNodeStruct----ParsePrgid SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+	#endif
+		if(iSaveLen < 0)
+		{
+			ComDebugTx("PrintNodeStruct----ParsePrgid SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+			return iSaveLen;
+		}
+	
+		if(giPayWavePrgIdIndex == 0)
+		{
+			iRet = ClssGetRecordIndex("PAYWAVE_PROGRAMID", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("PrintNodeStruct----ParsePrgid ClssGetRecordIndex iRet = %d \n", iRet);
+		#endif
+			if(iRet < 0)
+			{
+				ComDebugTx("PrintNodeStruct----ParsePrgid ClssGetRecordIndex iRet = %d \n", iRet);
+				return iRet;
+			}
+			gstNoeRecord[iRet].iStartPos = giCurrentOffset;
+		}
+		giCurrentOffset += iSaveLen;
+		giPayWavePrgIdIndex++;
+	}
+	else if((strcmp(pucNodeName, "<TERMINALCAPABILITIES>") == 0) && (iClssType ==CLSS_PAYWAVE))
+	{
+		PAYWAVE_TERM_CAPABILITY_NODE_T *pstTermCapNode = NULL;
+		pstTermCapNode = (PAYWAVE_TERM_CAPABILITY_NODE_T *)data;
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		AppHexLog("PrintNodeStruct paywaveParsetermcap---- pstPrgIdNode.ucTermType = \n", &(pstTermCapNode->ucTermType), sizeof(pstTermCapNode->ucTermType));
+		AppHexLog("PrintNodeStruct paywaveParsetermcap---- pstPrgIdNode.ucCardDataInput = \n", &(pstTermCapNode->ucCardDataInput), sizeof(pstTermCapNode->ucCardDataInput));
+		AppHexLog("PrintNodeStruct paywaveParsetermcap---- pstPrgIdNode.ucCVMSupport = \n", &(pstTermCapNode->ucCVMSupport), sizeof(pstTermCapNode->ucCVMSupport));
+		AppHexLog("PrintNodeStruct paywaveParsetermcap---- pstPrgIdNode.ucOffDataAuth = \n", &(pstTermCapNode->ucOffDataAuth), sizeof(pstTermCapNode->ucOffDataAuth));
+		AppHexLog("PrintNodeStruct paywaveParsetermcap---- pstPrgIdNode.ucTransTypeCapa = \n", &(pstTermCapNode->ucTransTypeCapa), sizeof(pstTermCapNode->ucTransTypeCapa));
+		AppHexLog("PrintNodeStruct paywaveParsetermcap---- pstPrgIdNode.ucTermInput = \n", &(pstTermCapNode->ucTermInput), sizeof(pstTermCapNode->ucTermInput));
+		AppHexLog("PrintNodeStruct paywaveParsetermcap---- pstPrgIdNode.ucTermOutput = \n", &(pstTermCapNode->ucTermOutput), sizeof(pstTermCapNode->ucTermOutput));
+		
+		ComDebugTx("PrintNodeStruct paywaveParsetermcap---- giPayWaveTermCapIndex = %d \n", giPayWaveTermCapIndex);	
+		ComDebugTx("PrintNodeStruct----paywaveParsetermcap giCurrentOffset = %d \n", giCurrentOffset);
+	#endif
+		iSaveLen = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)pstTermCapNode, iLen, giCurrentOffset);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("PrintNodeStruct----paywaveParsetermcap SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+	#endif
+		if(iSaveLen < 0)
+		{
+			ComDebugTx("PrintNodeStruct----paywaveParsetermcap SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+			return iSaveLen;
+		}
+	
+		if(giPayWaveTermCapIndex == 0)
+		{
+			iRet = ClssGetRecordIndex("PAYWAVE_TERM_CAP", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("PrintNodeStruct----paywaveParsetermcap ClssGetRecordIndex iRet = %d \n", iRet);
+		#endif
+			if(iRet < 0)
+			{
+				ComDebugTx("PrintNodeStruct----paywaveParsetermcap ClssGetRecordIndex iRet = %d \n", iRet);
+				return iRet;
+			}
+			gstNoeRecord[iRet].iStartPos = giCurrentOffset;
+		}
+		giCurrentOffset += iSaveLen;
+		giPayWaveTermCapIndex++;
+	}
+	else if((strcmp(pucNodeName, "<OTHERCONFIGURATION>") == 0) && (iClssType ==CLSS_COMMON))
+	{
+		CLSS_OTHER_CONF_NODE_T *pstOtherConfNode = NULL;
+		pstOtherConfNode = (CLSS_OTHER_CONF_NODE_T *)data;
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		AppHexLog("PrintNodeStruct ClssOtherConf---- pstOtherConfNode.auccountryCode = \n", pstOtherConfNode->aucCountryCode, sizeof(pstOtherConfNode->aucCountryCode));
+		AppHexLog("PrintNodeStruct ClssOtherConf---- pstOtherConfNode.aucCurrencyCode = \n", pstOtherConfNode->aucCurrencyCode, sizeof(pstOtherConfNode->aucCurrencyCode));
+		AppHexLog("PrintNodeStruct ClssOtherConf---- pstOtherConfNode.aucRefCurrenCyCode = \n", pstOtherConfNode->aucRefCurrencyCode, sizeof(pstOtherConfNode->aucRefCurrencyCode));
+
+		ComDebugTx("PrintNodeStruct ClssOtherConf---- pstOtherConfNode->pstOtherConfNode = %d \n", pstOtherConfNode->ucCurrencyExponent);	
+		ComDebugTx("PrintNodeStruct mmClssOtherConf pstOtherConfNode->ucRefCurrencyExponent = %d \n", pstOtherConfNode->ucRefCurrencyExponent);
+		
+		AppHexLog("PrintNodeStruct ClssOtherConf---- pstOtherConfNode.aucRefCurrenceConVerRate = \n", pstOtherConfNode->aucRefCurrenceConVerRate, sizeof(pstOtherConfNode->aucRefCurrenceConVerRate));
+		AppHexLog("PrintNodeStruct ClssOtherConf---- pstOtherConfNode.ucTransTypeCapa = \n", pstOtherConfNode->aucMerchantCateCode, sizeof(pstOtherConfNode->aucMerchantCateCode));
+		
+		ComDebugTx("PrintNodeStruct ClssOtherConf---- giPayWaveTermCapIndex = %s \n", pstOtherConfNode->aucMerchantId);	
+		ComDebugTx("PrintNodeStruct ClssOtherConf giCurrentOffset = %s \n", pstOtherConfNode->aucTerminalId);
+		ComDebugTx("PrintNodeStruct ClssOtherConf---- giPayWaveTermCapIndex = %s \n", pstOtherConfNode->aucMerChantName);	
+		ComDebugTx("PrintNodeStruct ClssOtherConf giCurrentOffset = %s \n", pstOtherConfNode->aucMerChantLocalAddr);
+		
+		ComDebugTx("PrintNodeStruct ClssOtherConf---- giClssOhterConfIndex = %d \n", giClssOhterConfIndex);	
+		ComDebugTx("PrintNodeStruct ClssOtherConf giCurrentOffset = %d \n", giCurrentOffset);
+	#endif
+		iSaveLen = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)pstOtherConfNode, iLen, giCurrentOffset);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("PrintNodeStruct----ClssOtherConf SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+	#endif
+		if(iSaveLen < 0)
+		{
+			ComDebugTx("PrintNodeStruct----ClssOtherConf SaveParsedDataToFile iSaveLen = %d \n", iSaveLen);
+			return iSaveLen;
+		}
+	
+		if(giClssOhterConfIndex == 0)
+		{
+			iRet = ClssGetRecordIndex("CLSS_OHTER_CONF", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("PrintNodeStruct----ClssOtherConf ClssGetRecordIndex iRet = %d \n", iRet);
+		#endif
+			if(iRet < 0)
+			{
+				ComDebugTx("PrintNodeStruct----ClssOtherConf ClssGetRecordIndex iRet = %d \n", iRet);
+				return iRet;
+			}
+			gstNoeRecord[iRet].iStartPos = giCurrentOffset;
+		}
+		giCurrentOffset += iSaveLen;
+		giClssOhterConfIndex++;
+	}
+	return giCurrentOffset;
+}
+
+
+//begin to parse aid
+static int PaypassGetAidChileNode(const uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "</AID>") != NULL)
+	{
+		return CLSS_XML_FILE_OP_OK;
+	}		
+	if(strstr(pucXmlOneLine, "PartialAIDSelection") != NULL)
+	{
+		return PAYPASS_PARTIALAIDSELECTION;
+	}
+	if(strstr(pucXmlOneLine, "ApplicationID") != NULL)
+	{
+		return PAYPASS_APPLICATIONID;
+	}
+	if(strstr(pucXmlOneLine, "IfUseLocalAIDName") != NULL)
+	{
+		return PAYPASS_LOACALAIDNAME;
+	}
+	if(strstr(pucXmlOneLine, "LocalAIDName") != NULL)
+	{
+		return PAYPASS_LOACALAIDNAME;
+	}
+	if(strstr(pucXmlOneLine, "TerminalAIDVersion") != NULL)
+	{
+		return PAYPASS_TERMINALAIDVERSION;
+	}
+	if(strstr(pucXmlOneLine, "MagneticApplicationVersionNumber") != NULL)
+	{
+		return PAYPASS_MAG_APP_VERSION_NUM;
+	}
+	if(strstr(pucXmlOneLine, "TACDenial") != NULL)
+	{
+		return PAYPASS_TACDENIAL;
+	}
+	if(strstr(pucXmlOneLine, "TACOnline") != NULL)
+	{
+		return PAYPASS_TACONLINE;
+	}
+	if(strstr(pucXmlOneLine, "TACDefault") != NULL)
+	{
+		return PAYPASS_TACDEFAULT;
+	}
+	if(strstr(pucXmlOneLine, "TerminalRisk") != NULL)
+	{
+		return PAYPASS_TERMINAL_RISK;
+	}
+	if(strstr(pucXmlOneLine, "ContactlessCVMLimit") != NULL)
+	{
+		return PAYPASS_CLSS_CVM_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "ContactlessTransactionLimit_NoOnDevice") != NULL)
+	{
+		return PAYPASS_CLSS_TRANS_LIMIT_NO_ON_DEVICE;
+	}
+	if(strstr(pucXmlOneLine, "ContactlessTransactionLimit_OnDevice") != NULL)
+	{
+		return PAYPASS_CLSS_TRANS_LIMIT_ON_DEVICE;
+	}
+	if(strstr(pucXmlOneLine, "ContactlessFloorLimit") != NULL)
+	{
+		return PAYPASS_CLSS_FLOOR_LIMIT;
+	}
+	
+	return 0;
+
+}
+
+static int PaypassGetPartialSelectionValue(const uchar *pucXmlOneLine, uchar *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "PartialAIDSelection", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	return iRet;
+}
+
+static int PaypassGetApplicationIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ApplicationID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	gucAidLen = 0;
+	gucAidLen = (uchar)strlen((const char *)pucBuf) / 2;
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetIfUseLocalAIDNameValue(const uchar *pucXmlOneLine, uchar *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "IfUseLocalAIDName", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = atoi(pucBuf);
+	return iRet;
+}
+
+
+static int PaypassGetLocalAIDNameValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "LocalAIDName", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	strcpy(pucData, pucBuf);
+
+	return iRet;
+}
+
+static int PaypassGetTerminalAIDVersionValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalAIDVersion", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassMagneticApplicationVersionNumberValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MagneticApplicationVersionNumber", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetTACDenialValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TACDenial", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetTACOnlineValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TACOnline", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetTACDefaultValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TACDefault", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetTerminalRiskValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalRisk", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetContactlessCVMLimitValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessCVMLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetContactlessTransactionLimit_NoOnDeviceValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessTransactionLimit_NoOnDevice", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetContactlessTransactionLimit_OnDeviceValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessTransactionLimit_OnDevice", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetContactlessFloorLimitValue(const uchar *pucXmlOneLine, uint *pulData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessFloorLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pulData = atoi(pucBuf);
+
+	return iRet;
+}
+
+static int ParsePayPassAidChildNode(const uchar *pucXmlOneLine, void *Data)
+{
+	int iChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+	PAYPASS_AID_NODE_T *stAidNode = NULL;
+	stAidNode = (PAYPASS_AID_NODE_T *)Data;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iChildNode = PaypassGetAidChileNode(pucXmlOneLine);
+	if(iChildNode < 0)
+	{
+		return CLSS_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+	}
+
+	switch(iChildNode)
+	{
+		case PAYPASS_PARTIALAIDSELECTION:
+			iRet = PaypassGetPartialSelectionValue(pucXmlOneLine, &(stAidNode->ucSelFlag));
+			break;
+		case PAYPASS_APPLICATIONID:
+			iRet = PaypassGetApplicationIDValue(pucXmlOneLine, stAidNode->aucAID);
+		    stAidNode->ucAidLen = gucAidLen;
+			gucAidLen = 0;
+			break;
+		case PAYPASS_IFUSELOCALNAME:
+			iRet = PaypassGetIfUseLocalAIDNameValue(pucXmlOneLine, &(stAidNode->ucIfUseLocalName));
+			break;
+		case PAYPASS_LOACALAIDNAME:
+			iRet = PaypassGetLocalAIDNameValue(pucXmlOneLine, stAidNode->aucAppName);
+			break;
+		case PAYPASS_TERMINALAIDVERSION:
+			iRet = PaypassGetTerminalAIDVersionValue(pucXmlOneLine, stAidNode->aucVersion);
+			break;
+		case PAYPASS_MAG_APP_VERSION_NUM:
+			iRet = PaypassMagneticApplicationVersionNumberValue(pucXmlOneLine, stAidNode->aucMagAppVersion);
+			break;
+		case PAYPASS_TACDENIAL:
+			iRet = PaypassGetTACDenialValue(pucXmlOneLine, stAidNode->aucTACDenial);
+			break;
+		case PAYPASS_TACONLINE:
+			iRet = PaypassGetTACOnlineValue(pucXmlOneLine, stAidNode->aucTACOnline);
+			break;
+		case PAYPASS_TACDEFAULT:
+			iRet = PaypassGetTACDefaultValue(pucXmlOneLine, stAidNode->aucTACDefault);
+			break;
+		case PAYPASS_TERMINAL_RISK:
+			iRet = PaypassGetTerminalRiskValue(pucXmlOneLine, stAidNode->aucTermRisk);
+			break;
+		case PAYPASS_CLSS_CVM_LIMIT:
+			iRet = PaypassGetContactlessCVMLimitValue(pucXmlOneLine, stAidNode->aucRDCVMLmt);
+			break;
+		case PAYPASS_CLSS_TRANS_LIMIT_NO_ON_DEVICE:
+			iRet = PaypassGetContactlessTransactionLimit_NoOnDeviceValue(pucXmlOneLine, stAidNode->aucTxnLmt_NoOnDevice);
+			break;
+		case PAYPASS_CLSS_TRANS_LIMIT_ON_DEVICE:
+			iRet = PaypassGetContactlessTransactionLimit_OnDeviceValue(pucXmlOneLine, stAidNode->aucTxnLmt_OnDevice);
+			break;
+		case PAYPASS_CLSS_FLOOR_LIMIT:
+			iRet = PaypassGetContactlessFloorLimitValue(pucXmlOneLine, &(stAidNode->ulClssFloorLimit));
+			break;
+
+		default:
+			break;
+	}
+	
+	
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvAidChildNode---- GetAidChileNode = %d iSize = %d iRet = %d\n", iChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+
+static int PaypassGetConfChileNode(const uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "</PAYPASSCONFIGURATION>") != NULL)
+	{
+		return CLSS_XML_FILE_OP_OK;
+	}		
+	if(strstr(pucXmlOneLine, "KernelConfiguration") != NULL)
+	{
+		return PAYPASS_KERNEL_CONF;
+	}
+	if(strstr(pucXmlOneLine, "TornLeftTime") != NULL)
+	{
+		return PAYPASS_TORN_LEFT_TIME;
+	}
+	if(strstr(pucXmlOneLine, "MaximumTornNumber") != NULL)
+	{
+		return PAYPASS_MAX_TORN_NUM;
+	}
+	if(strstr(pucXmlOneLine, "MagneticCVM") != NULL)
+	{
+		return PAYPASS_MAGENTIC_CVM;
+	}
+	if(strstr(pucXmlOneLine, "MageticNoCVM") != NULL)
+	{
+		return PAYPASS_PAYPASS_MAGENTIC_NO_CVM;
+	}
+	if(strstr(pucXmlOneLine, "MobileSupport") != NULL)
+	{
+		return PAYPASS_MOBILE_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "CardDataInput") != NULL)
+	{
+		return PAYPASS_CARD_DATA_INPUT;
+	}
+	if(strstr(pucXmlOneLine, "CVMCapability_CVMRequired") != NULL)
+	{
+		return PAYPASS_CVM_CAPA_CVM_REQ;
+	}
+	if(strstr(pucXmlOneLine, "CVMCapability_NoCVMRequired") != NULL)
+	{
+		return PAYPASS_CVM_CAPA_NO_CVM_REQ;
+	}
+	if(strstr(pucXmlOneLine, "TerminalType") != NULL)
+	{
+		return PAYPASS_TERMINAL_TYPE;
+	}
+	if(strstr(pucXmlOneLine, "AccoutType") != NULL)
+	{
+		return PAYPASS_ACCOUNT_TYPE;
+	}
+	if(strstr(pucXmlOneLine, "AdditionalTerminalCapability") != NULL)
+	{
+		return PAYPASS_ADDITION_TEEM_CAP;
+	}
+	if(strstr(pucXmlOneLine, "KernelID") != NULL)
+	{
+		return PAYPASS_KERNEL_ID;
+	}
+	if(strstr(pucXmlOneLine, "SecurityCapability") != NULL)
+	{
+		return PAYPASS_SECURITY_CAPALILITY;
+	}
+	
+	return 0;
+
+}
+
+static int PaypassGetKernelConfValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "KernelConfiguration", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetTornLeftTimeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TornLeftTime", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int PaypassGetMaximumTornNumberValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MaximumTornNumber", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int PaypassGetMagneticCVMValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MagneticCVM", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetMageticNoCVMValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MageticNoCVM", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int PaypassGetMobileSupportValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MobileSupport", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetCardDataInputValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CardDataInput", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetCVMCapability_CVMRequiredValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CVMCapability_CVMRequired", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetCVMCapability_NoCVMRequiredValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CVMCapability_NoCVMRequired", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int PaypassGetTerminalTypeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalType", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetAccoutTypeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "AccoutType", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetAdditionalTerminalCapabilityValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "AdditionalTerminalCapability", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PaypassGetKernelIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "KernelID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int PaypassGetSecurityCapabilityValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "SecurityCapability", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int ParsePayPassConfChildNode(const uchar *pucXmlOneLine, void *Data)
+{
+	int iChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+	PAYPASS_CONF_T *stConfNode = NULL;
+	stConfNode = (PAYPASS_CONF_T *)Data;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iChildNode = PaypassGetConfChileNode(pucXmlOneLine);
+	if(iChildNode < 0)
+	{
+		return CLSS_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+	}
+
+	switch(iChildNode)
+	{
+		case PAYPASS_KERNEL_CONF:
+			iRet = PaypassGetKernelConfValue(pucXmlOneLine, &(stConfNode->ucKernelConf));
+			break;
+		case PAYPASS_TORN_LEFT_TIME:
+			iRet = PaypassGetTornLeftTimeValue(pucXmlOneLine, &(stConfNode->ucTornLeftTime));
+			break;
+		case PAYPASS_MAX_TORN_NUM:
+			iRet = PaypassGetMaximumTornNumberValue(pucXmlOneLine, &(stConfNode->ucMaximumTornNumber));
+			break;
+		case PAYPASS_MAGENTIC_CVM:
+			iRet = PaypassGetMagneticCVMValue(pucXmlOneLine, &(stConfNode->ucMagneticCVM));
+			break;
+		case PAYPASS_PAYPASS_MAGENTIC_NO_CVM:
+			iRet = PaypassGetMageticNoCVMValue(pucXmlOneLine, &(stConfNode->ucMageticNoCVM));
+			break;
+		case PAYPASS_MOBILE_SUPPORT:
+			iRet = PaypassGetMobileSupportValue(pucXmlOneLine, &(stConfNode->ucMobileSupport));
+			break;
+		case PAYPASS_CARD_DATA_INPUT:
+			iRet = PaypassGetCardDataInputValue(pucXmlOneLine, &(stConfNode->ucCardDataInput));
+			break;
+		case PAYPASS_CVM_CAPA_CVM_REQ:
+			iRet = PaypassGetCVMCapability_CVMRequiredValue(pucXmlOneLine, &(stConfNode->ucCVMCapability_CVMRequired));
+			break;
+		case PAYPASS_CVM_CAPA_NO_CVM_REQ:
+			iRet = PaypassGetCVMCapability_NoCVMRequiredValue(pucXmlOneLine, &(stConfNode->ucCVMCapability_NoCVMRequired));
+			break;
+		case PAYPASS_TERMINAL_TYPE:
+			iRet = PaypassGetTerminalTypeValue(pucXmlOneLine, &(stConfNode->ucTerminalType));
+			break;
+		case PAYPASS_ACCOUNT_TYPE:
+			iRet = PaypassGetAccoutTypeValue(pucXmlOneLine, &(stConfNode->ucAccoutType));
+			break;
+		case PAYPASS_ADDITION_TEEM_CAP:
+			iRet = PaypassGetAdditionalTerminalCapabilityValue(pucXmlOneLine, stConfNode->aucAdditionalTerminalCapability);
+			break;
+		case PAYPASS_KERNEL_ID:
+			iRet = PaypassGetKernelIDValue(pucXmlOneLine, &(stConfNode->ucKernelID));
+			break;
+		case PAYPASS_SECURITY_CAPALILITY:
+			iRet = PaypassGetSecurityCapabilityValue(pucXmlOneLine, &(stConfNode->ucSecurityCapability));
+			break;
+
+		default:
+			break;
+	}
+	
+	
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayPassConfChildNode---- PaypassGetConfChileNode = %d iSize = %d iRet = %d\n", iChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+static int PayWaveGetInterWareChileNode(const uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "/Inter_WareFloorlimitByTransactionType") != NULL)
+	{
+		return CLSS_XML_FILE_OP_OK;
+	}		
+	if(strstr(pucXmlOneLine, "<TransactionType>") != NULL)
+	{
+		return PAYWAVE_TRANS_TYPE;
+	}
+	if(strstr(pucXmlOneLine, "<TerminalFloorLimit>") != NULL)
+	{
+		return PAYWAVE_TERM_FLOOR_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessCVMLimit>") != NULL)
+	{
+		return PAYWAVE_CLSS_CVM_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessTransactionLimit>") != NULL)
+	{
+		return PAYWAVE_CLSS_TRANS_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessFloorLimit>") != NULL)
+	{
+		return PAYWAVE_CLSS_FLOOR_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<TerminalFloorLimitSupported>") != NULL)
+	{
+		return PAYWAVE_TERM_FLOOR_LIMINT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessTransactionLimitSupported>") != NULL)
+	{
+		return PAYWAVE_CLSS_TRANS_LIMIT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<CVMLimitSupported>") != NULL)
+	{
+		return PAYWAVE_CVM_LIMIT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessFloorLimitSupported>") != NULL)
+	{
+		return PAYWAVE_CLSS_FLOOR_LIMIT_SUPPORT;
+	}
+	return 0;
+
+}
+
+static int PayWaveGetTransactionTypeValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TransactionType", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PayWaveGetTerminalFloorLimitValue(const uchar *pucXmlOneLine, ulong *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalFloorLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//*piData = atoi(pucBuf);
+	PubAsc2Long(pucBuf, strlen((const char *)pucBuf), piData);
+
+	return iRet;
+}
+
+static int PayWaveGetContactlessCVMLimitValue(const uchar *pucXmlOneLine, ulong *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessCVMLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//*piData = atoi(pucBuf);
+	PubAsc2Long(pucBuf, strlen((const char *)pucBuf), piData);
+
+	return iRet;
+}
+
+static int PayWaveGetContactlessTransactionLimitValue(const uchar *pucXmlOneLine, ulong *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessTransactionLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//*piData = atoi(pucBuf);
+	PubAsc2Long(pucBuf, strlen((const char *)pucBuf), piData);
+
+	return iRet;
+}
+
+static int PayWaveGetContactlessFloorLimitValue(const uchar *pucXmlOneLine, ulong *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessFloorLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//*piData = atoi(pucBuf);
+	PubAsc2Long(pucBuf, strlen((const char *)pucBuf), piData);
+
+	return iRet;
+}
+
+
+static int PayWaveGetTerminalFloorLimitSupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalFloorLimitSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int PayWaveGetContactlessTransactionLimitSupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessTransactionLimitSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int PayWaveGetCVMLimitSupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CVMLimitSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int PayWaveGetContactlessFloorLimitSupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessFloorLimitSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int ParsePayWaveInterWareChildNode(const uchar *pucXmlOneLine, void *Data)
+{
+	int iChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+	PAYWAVE_INTER_WARE_NODE_T *pstInterWareNode = NULL;
+	pstInterWareNode = (PAYWAVE_INTER_WARE_NODE_T *)Data;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iChildNode = PayWaveGetInterWareChileNode(pucXmlOneLine);
+	if(iChildNode < 0)
+	{
+		return CLSS_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+	}
+
+	switch(iChildNode)
+	{
+		case PAYWAVE_TRANS_TYPE:
+			iRet = PayWaveGetTransactionTypeValue(pucXmlOneLine, &(pstInterWareNode->ucTransType));
+			break;
+		case PAYWAVE_TERM_FLOOR_LIMIT:
+			iRet = PayWaveGetTerminalFloorLimitValue(pucXmlOneLine, &(pstInterWareNode->ulTermFLmt));
+			break;
+		case PAYWAVE_CLSS_CVM_LIMIT:
+			iRet = PayWaveGetContactlessCVMLimitValue(pucXmlOneLine, &(pstInterWareNode->ulRdCVMLmt));
+			break;
+		case PAYWAVE_CLSS_TRANS_LIMIT:
+			iRet = PayWaveGetContactlessTransactionLimitValue(pucXmlOneLine, &(pstInterWareNode->ulcRdClssTxnLmt));
+			break;
+		case PAYWAVE_CLSS_FLOOR_LIMIT:
+			iRet = PayWaveGetContactlessFloorLimitValue(pucXmlOneLine, &(pstInterWareNode->ulRdClssFLmt));
+			break;
+		case PAYWAVE_TERM_FLOOR_LIMINT_SUPPORT:
+			iRet = PayWaveGetTerminalFloorLimitSupportedValue(pucXmlOneLine, &(pstInterWareNode->ucTermFLmtFlg));
+			break;
+		case PAYWAVE_CLSS_TRANS_LIMIT_SUPPORT:
+			iRet = PayWaveGetContactlessTransactionLimitSupportedValue(pucXmlOneLine, &(pstInterWareNode->ucRdClssTxnLmtFlg));
+			break;
+		case PAYWAVE_CVM_LIMIT_SUPPORT:
+			iRet = PayWaveGetCVMLimitSupportedValue(pucXmlOneLine, &(pstInterWareNode->ucRdCVMLmtFlg));
+			break;
+		case PAYWAVE_CLSS_FLOOR_LIMIT_SUPPORT:
+			iRet = PayWaveGetContactlessFloorLimitSupportedValue(pucXmlOneLine, &(pstInterWareNode->ucRdClssFLmtFlg));
+			break;
+		default:
+			break;
+	}
+	
+	
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWaveInterWareChildNode---- PayWaveGetInterWareChileNode = %d iSize = %d iRet = %d\n", iChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+
+//begin to parse aid
+static int PayWaveGetAidChileNode(const uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "</AID>") != NULL)
+	{
+		return CLSS_XML_FILE_OP_OK;
+	}		
+	if(strstr(pucXmlOneLine, "<PartialAIDSelection>") != NULL)
+	{
+		return PAYWAVE_PARTIALAIDSELECTION;
+	}
+	if(strstr(pucXmlOneLine, "<ApplicationID>") != NULL)
+	{
+		return PAYWAVE_APPLICATIONID;
+	}
+	if(strstr(pucXmlOneLine, "<IfUseLocalAIDName>") != NULL)
+	{
+		return PAYWAVE_IFUSELOCALNAME;
+	}
+	if(strstr(pucXmlOneLine, "<LocalAIDName>") != NULL)
+	{
+		return PAYWAVE_LOACALAIDNAME;
+	}
+	if(strstr(pucXmlOneLine, "<TerminalAIDVersion>") != NULL)
+	{
+		return PAYWAVE_TERMINALAIDVERSION;
+	}
+	if(strstr(pucXmlOneLine, "<CryptogramVersion17Supported>") != NULL)
+	{
+		return PAYWAVE_CRY_VER17_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ZeroAmountNoAllowed>") != NULL)
+	{
+		return PAYWAVE_ZERO_AMT_NO_ALLOW;
+	}
+	if(strstr(pucXmlOneLine, "<StatusCheckSupported>") != NULL)
+	{
+		return PAYWAVE_STATUS_CHECKSUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ReaderTTQ>") != NULL)
+	{
+		return PAYWAVE_READER_TTQ;
+	}
+	if(strstr(pucXmlOneLine, "<INTERWARELIST") != NULL)
+	{
+		return PAYWAVE_INTERWARELIST_START;
+	}
+	if(strstr(pucXmlOneLine, "</INTERWARELIST") != NULL)
+	{
+		return PAYWAVE_INTERWARELIST_END;
+	}
+	if(strstr(pucXmlOneLine, "<Inter_WareFloorlimitByTransactionType") != NULL)
+	{
+		return PAYWAVE_INTER_WARE_NODE_START;
+	}
+	if(strstr(pucXmlOneLine, "</Inter_WareFloorlimitByTransactionType") != NULL)
+	{
+		return PAYWAVE_INTER_WARE_NODE_END;
+	}		
+	if(strstr(pucXmlOneLine, "<TransactionType>") != NULL)
+	{
+		return PAYWAVE_TRANS_TYPE;
+	}
+	if(strstr(pucXmlOneLine, "<TerminalFloorLimit>") != NULL)
+	{
+		return PAYWAVE_TERM_FLOOR_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessCVMLimit>") != NULL)
+	{
+		return PAYWAVE_CLSS_CVM_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessTransactionLimit>") != NULL)
+	{
+		return PAYWAVE_CLSS_TRANS_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessFloorLimit>") != NULL)
+	{
+		return PAYWAVE_CLSS_FLOOR_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<TerminalFloorLimitSupported>") != NULL)
+	{
+		return PAYWAVE_TERM_FLOOR_LIMINT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessTransactionLimitSupported>") != NULL)
+	{
+		return PAYWAVE_CLSS_TRANS_LIMIT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<CVMLimitSupported>") != NULL)
+	{
+		return PAYWAVE_CVM_LIMIT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessFloorLimitSupported>") != NULL)
+	{
+		return PAYWAVE_CLSS_FLOOR_LIMIT_SUPPORT;
+	}
+	return 0;
+
+}
+
+
+static int PayWaveGetPartialSelectionValue(const uchar *pucXmlOneLine, uchar *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "PartialAIDSelection", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+	
+	return iRet;
+}
+
+static int PayWaveGetApplicationIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ApplicationID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	gucAidLen = 0;
+	gucAidLen = (uchar)strlen((const char *)pucBuf) / 2;
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PayWaveGetIfUseLocalAIDNameValue(const uchar *pucXmlOneLine, uchar *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "IfUseLocalAIDName", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = atoi(pucBuf);
+
+	return iRet;
+}
+
+
+static int PayWaveGetLocalAIDNameValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "LocalAIDName", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	strcpy(pucData, pucBuf);
+
+	return iRet;
+}
+
+static int PayWaveGetTerminalAIDVersionValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalAIDVersion", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PayWaveGetCryptogramVersion17SupportedValue(const uchar *pucXmlOneLine, uchar *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CryptogramVersion17Supported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int PayWaveGetZeroAmountNoAllowedValue(const uchar *pucXmlOneLine, uchar *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ZeroAmountNoAllowed", pucBuf);
+	
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int PayWaveGetStatusCheckSupportedValue(const uchar *pucXmlOneLine, uchar *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "StatusCheckSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+
+static int PayWaveGetReaderTTQValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ReaderTTQ", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int ParsePayWaveAidChildNode(const uchar *pucXmlOneLine, void *Data)
+{
+	int iChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+	PAYWAVE_AID_NODE_T *stAidNode = NULL;
+	stAidNode = (PAYWAVE_AID_NODE_T *)Data;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iChildNode = PayWaveGetAidChileNode(pucXmlOneLine);
+	if(iChildNode < 0)
+	{
+		return CLSS_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+	}
+
+	switch(iChildNode)
+	{
+		case PAYWAVE_PARTIALAIDSELECTION:
+			iRet = PayWaveGetPartialSelectionValue(pucXmlOneLine, &(stAidNode->ucSelFlag));
+			break;
+		case PAYWAVE_APPLICATIONID:
+			iRet = PayWaveGetApplicationIDValue(pucXmlOneLine, stAidNode->aucAID);
+			stAidNode->ucAidLen = gucAidLen;
+			gucAidLen = 0;
+			break;
+		case PAYWAVE_IFUSELOCALNAME:
+			iRet = PayWaveGetIfUseLocalAIDNameValue(pucXmlOneLine, &(stAidNode->ucIfUseLocalName));
+			break;
+		case PAYWAVE_LOACALAIDNAME:
+			iRet = PayWaveGetLocalAIDNameValue(pucXmlOneLine, stAidNode->aucAppName);
+			break;
+		case PAYWAVE_TERMINALAIDVERSION:
+			iRet = PayWaveGetTerminalAIDVersionValue(pucXmlOneLine, stAidNode->aucAppVersion);
+			break;
+		case PAYWAVE_CRY_VER17_SUPPORT:
+			iRet = PayWaveGetCryptogramVersion17SupportedValue(pucXmlOneLine, &(stAidNode->ucCrypto17Flg));
+			break;
+		case PAYWAVE_ZERO_AMT_NO_ALLOW:
+			iRet = PayWaveGetZeroAmountNoAllowedValue(pucXmlOneLine, &(stAidNode->ucZeroAmtNoAllowed));
+			break;
+		case PAYWAVE_STATUS_CHECKSUPPORT:
+			iRet = PayWaveGetStatusCheckSupportedValue(pucXmlOneLine, &(stAidNode->ucStatusCheckFlg));
+			break;
+		case PAYWAVE_READER_TTQ:
+			iRet = PayWaveGetReaderTTQValue(pucXmlOneLine, stAidNode->aucReaderTTQ);
+			break;
+		case PAYWAVE_INTERWARELIST_START:
+			break;
+		case PAYWAVE_INTER_WARE_NODE_START:
+			giPayWaveInterWareIndex++;
+			break;
+		case PAYWAVE_INTERWARELIST_END:
+			//giPayWaveInterWareIndex = 0;
+			break;
+		case PAYWAVE_TRANS_TYPE:	
+		case PAYWAVE_TERM_FLOOR_LIMIT:			
+		case PAYWAVE_CLSS_CVM_LIMIT:				
+		case PAYWAVE_CLSS_TRANS_LIMIT:				
+		case PAYWAVE_CLSS_FLOOR_LIMIT:		
+		case PAYWAVE_TERM_FLOOR_LIMINT_SUPPORT:		
+		case PAYWAVE_CLSS_TRANS_LIMIT_SUPPORT:					
+		case PAYWAVE_CVM_LIMIT_SUPPORT:					
+		case PAYWAVE_CLSS_FLOOR_LIMIT_SUPPORT:
+			iRet = ParsePayWaveInterWareChildNode(pucXmlOneLine, &(stAidNode->stFlmtByTransType[giPayWaveInterWareIndex - 1]));
+			break;
+			
+		default:
+			break;
+	}
+	
+	
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvAidChildNode---- GetAidChileNode = %d iSize = %d iRet = %d\n", iChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+
+
+static int PayWaveGetProgramIdChileNode(const uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "/PROGRAMID") != NULL)
+	{
+		return CLSS_XML_FILE_OP_OK;
+	}		
+	if(strstr(pucXmlOneLine, "<ProgramId>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID;
+	}
+	if(strstr(pucXmlOneLine, "<TerminalFloorLimit>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_TERM_FLOOR_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessCVMLimit>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_CLSS_CVM_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessTransactionLimit>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_CLSS_TRANS_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessFloorLimit>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_CLSS_FLOOR_LIMIT;
+	}
+	if(strstr(pucXmlOneLine, "<TerminalFloorLimitSupported>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_TERM_FLOOR_LIMIT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessTransactionLimitSupported>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_CLSS_TRANS_LIMIT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<CVMLimitSupported>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_CVM_LIMIT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ContactlessFloorLimitSupported>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_CLSS_FLOOR_LIMIT_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<CryptogramVersion17Supported>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_CRYPTO_VERSION_17_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ZeroAmountNoAllowed>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_ZERO_AMOUNT_NO_ALLOWED;
+	}
+	if(strstr(pucXmlOneLine, "<StatusCheckSupported>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_STATUS_CHECK_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<ReaderTTQ>") != NULL)
+	{
+		return PAYWAVE_PROGRAM_ID_READER_TTQ;
+	}
+	return 0;
+
+}
+
+
+static int PayWaveGetProgramIdValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ProgramId", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	gucProgramIdLen = 0;
+	gucProgramIdLen = (uchar)strlen((const char *)pucBuf) / 2;
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PayWaveProgramIdGetTerminalFloorLimitValue(const uchar *pucXmlOneLine, ulong *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalFloorLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//*piData = atoi(pucBuf);
+	PubAsc2Long(pucBuf, strlen((const char *)pucBuf), piData);
+
+	return iRet;
+}
+
+
+static int PayWaveProgramIdGetContactlessCVMLimitValue(const uchar *pucXmlOneLine, ulong *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessCVMLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//*piData = atoi(pucBuf);
+	PubAsc2Long(pucBuf, strlen((const char *)pucBuf), piData);
+
+	return iRet;
+}
+
+
+static int PayWaveProgramIdGetContactlessTransactionLimitValue(const uchar *pucXmlOneLine, ulong *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessTransactionLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//*piData = atoi(pucBuf);
+	PubAsc2Long(pucBuf, strlen((const char *)pucBuf), piData);
+
+	return iRet;
+}
+
+
+static int PayWaveProgramIdGetContactlessFloorLimitValue(const uchar *pucXmlOneLine, ulong *piData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessFloorLimit", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//*piData = atoi(pucBuf);
+	PubAsc2Long(pucBuf, strlen((const char *)pucBuf), piData);
+	
+	return iRet;
+}
+
+static int PayWaveProgramIdGetTerminalFloorLimitSupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalFloorLimitSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+	
+	return iRet;
+}
+
+
+
+static int PayWaveProgramIdGetContactlessTransactionLimitSupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessTransactionLimitSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+	
+
+	return iRet;
+}
+
+static int PayWaveProgramIdGetCVMLimitSupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CVMLimitSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int PayWaveProgramIdGetContactlessFloorLimitSupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ContactlessFloorLimitSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+	
+
+	return iRet;
+}
+
+static int PayWaveProgramIdGetCryptogramVersion17SupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CryptogramVersion17Supported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int PayWaveProgramIdGetZeroAmountNoAllowedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ZeroAmountNoAllowed", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int PayWaveProgramIdGetStatusCheckSupportedValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "StatusCheckSupported", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+	
+	return iRet;
+}
+
+
+
+static int PayWaveProgramIdGetReaderTTQValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ReaderTTQ", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int ParsePayWaveProgramIdChildNode(const uchar *pucXmlOneLine, void *Data)
+{
+	int iChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+	PAYWAVE_PROGREAM_ID_NODE_T *pstPrgIdNode = NULL;
+	pstPrgIdNode = (PAYWAVE_PROGREAM_ID_NODE_T *)Data;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iChildNode = PayWaveGetProgramIdChileNode(pucXmlOneLine);
+	if(iChildNode < 0)
+	{
+		return CLSS_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+	}
+
+	switch(iChildNode)
+	{
+		case PAYWAVE_PROGRAM_ID:
+			iRet = PayWaveGetProgramIdValue(pucXmlOneLine, pstPrgIdNode->aucProgramId);
+			pstPrgIdNode->ucPrgramIdLen = gucProgramIdLen;
+			gucProgramIdLen = 0;
+			break;
+		case PAYWAVE_PROGRAM_ID_TERM_FLOOR_LIMIT:
+			iRet = PayWaveProgramIdGetTerminalFloorLimitValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ulTermFLmt));
+			break;
+		case PAYWAVE_PROGRAM_ID_CLSS_CVM_LIMIT:
+			iRet = PayWaveProgramIdGetContactlessCVMLimitValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ulRdCVMLmt));
+			break;
+		case PAYWAVE_PROGRAM_ID_CLSS_TRANS_LIMIT:
+			iRet = PayWaveProgramIdGetContactlessTransactionLimitValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ulRdClssTxnLmt));
+			break;
+		case PAYWAVE_PROGRAM_ID_CLSS_FLOOR_LIMIT:
+			iRet = PayWaveProgramIdGetContactlessFloorLimitValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ulRdClssFLmt));
+			break;
+		case PAYWAVE_PROGRAM_ID_TERM_FLOOR_LIMIT_SUPPORT:
+			iRet = PayWaveProgramIdGetTerminalFloorLimitSupportedValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ucTermFLmtFlg));
+			break;
+		case PAYWAVE_PROGRAM_ID_CLSS_TRANS_LIMIT_SUPPORT:
+			iRet = PayWaveProgramIdGetContactlessTransactionLimitSupportedValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ucRdClssTxnLmtFlg));
+			break;
+		case PAYWAVE_PROGRAM_ID_CVM_LIMIT_SUPPORT:
+			iRet = PayWaveProgramIdGetCVMLimitSupportedValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ucRdCVMLmtFlg));
+			break;
+		case PAYWAVE_PROGRAM_ID_CLSS_FLOOR_LIMIT_SUPPORT:
+			iRet = PayWaveProgramIdGetContactlessFloorLimitSupportedValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ucRdClssFLmtFlg));
+			break;
+		case PAYWAVE_PROGRAM_ID_CRYPTO_VERSION_17_SUPPORT:
+			iRet = PayWaveProgramIdGetCryptogramVersion17SupportedValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ucCrypto17Flg));
+			break;
+		case PAYWAVE_PROGRAM_ID_ZERO_AMOUNT_NO_ALLOWED:
+			PayWaveProgramIdGetZeroAmountNoAllowedValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ucCrypto17Flg));
+			break;
+		case PAYWAVE_PROGRAM_ID_STATUS_CHECK_SUPPORT:
+			PayWaveProgramIdGetStatusCheckSupportedValue(pucXmlOneLine, &(pstPrgIdNode->tPreProcDRL.ucStatusCheckFlg));
+			break;
+		case PAYWAVE_PROGRAM_ID_READER_TTQ:
+			PayWaveProgramIdGetReaderTTQValue(pucXmlOneLine, pstPrgIdNode->tPreProcDRL.aucReaderTTQ);
+			break;
+			
+		default:
+			break;
+	}
+	
+	
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvAidChildNode---- GetAidChileNode = %d iSize = %d iRet = %d\n", iChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+
+
+static int PayWaveGetTermCapChileNode(const uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "</TERMINALCAPABILITIES>") != NULL)
+	{
+		return CLSS_XML_FILE_OP_OK;
+	}		
+	if(strstr(pucXmlOneLine, "<TermType>") != NULL)
+	{
+		return PAYWAVE_TERM_CAP_TERM_TYPE;
+	}
+	if(strstr(pucXmlOneLine, "<CardDataInput>") != NULL)
+	{
+		return PAYWAVE_TERM_CAP_CARD_DATA_INPUT;
+	}
+	if(strstr(pucXmlOneLine, "<CVMSupport>") != NULL)
+	{
+		return PAYWAVE_TERM_CAP_CVM_SUPPORT;
+	}
+	if(strstr(pucXmlOneLine, "<OffDataAuth>") != NULL)
+	{
+		return PAYWAVE_TERM_CAP_OFF_DATA_AUTH;
+	}
+	if(strstr(pucXmlOneLine, "<TransTypeCapa>") != NULL)
+	{
+		return PAYWAVE_TERM_CAP_TRANS_TYPE_CAPA;
+	}
+	if(strstr(pucXmlOneLine, "<TermInput>") != NULL)
+	{
+		return PAYWAVE_TERM_CAP_TERM_INPUT;
+	}
+	if(strstr(pucXmlOneLine, "<TermOutput>") != NULL)
+	{
+		return PAYWAVE_TERM_CAP_TERM_OUTPUT;
+	}
+		
+	return 0;
+
+}
+
+static int PayWaveTermCapGetTermTypevalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TermType", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PayWaveTermCapGetCardDataInputvalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CardDataInput", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int PayWaveTermCapGetCVMSupportvalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CVMSupport", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int PayWaveTermCapGetOffDataAuthvalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "OffDataAuth", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+	
+	return iRet;
+}
+
+static int PayWaveTermCapGetTransTypeCapavalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TransTypeCapa", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+static int PayWaveTermCapGetTermInputvalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TermInput", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int PayWaveTermCapGetTermOutputvalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TermOutput", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+
+
+
+static int ParsePayWaveTermCapChildNode(const uchar *pucXmlOneLine, void *Data)
+{
+	int iChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+	PAYWAVE_TERM_CAPABILITY_NODE_T *pstTermCapNode = NULL;
+	pstTermCapNode = (PAYWAVE_TERM_CAPABILITY_NODE_T *)Data;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iChildNode = PayWaveGetTermCapChileNode(pucXmlOneLine);
+	if(iChildNode < 0)
+	{
+		return CLSS_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+	}
+
+	switch(iChildNode)
+	{
+		case PAYWAVE_TERM_CAP_TERM_TYPE:
+			iRet = PayWaveTermCapGetTermTypevalue(pucXmlOneLine, &(pstTermCapNode->ucTermType));
+			break;
+		case PAYWAVE_TERM_CAP_CARD_DATA_INPUT:
+			iRet = PayWaveTermCapGetCardDataInputvalue(pucXmlOneLine, &(pstTermCapNode->ucCardDataInput));
+			break;
+		case PAYWAVE_TERM_CAP_CVM_SUPPORT:
+			iRet = PayWaveTermCapGetCVMSupportvalue(pucXmlOneLine, &(pstTermCapNode->ucCVMSupport));
+			break;
+		case PAYWAVE_TERM_CAP_OFF_DATA_AUTH:
+			iRet = PayWaveTermCapGetOffDataAuthvalue(pucXmlOneLine, &(pstTermCapNode->ucOffDataAuth));
+			break;
+		case PAYWAVE_TERM_CAP_TRANS_TYPE_CAPA:
+			iRet = PayWaveTermCapGetTransTypeCapavalue(pucXmlOneLine, &(pstTermCapNode->ucTransTypeCapa));
+			break;
+		case PAYWAVE_TERM_CAP_TERM_INPUT:
+			iRet = PayWaveTermCapGetTermInputvalue(pucXmlOneLine, &(pstTermCapNode->ucTermInput));
+			break;
+		case PAYWAVE_TERM_CAP_TERM_OUTPUT:
+			iRet = PayWaveTermCapGetTermOutputvalue(pucXmlOneLine, &(pstTermCapNode->ucTermOutput));
+			break;
+
+		default:
+			break;
+	}
+	
+	
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvAidChildNode---- GetAidChileNode = %d iSize = %d iRet = %d\n", iChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+static int ClssGetOtherConfChileNode(const uchar *pucXmlOneLine)
+{
+	if(pucXmlOneLine == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlOneLine, "</OTHERCONFIGURATION>") != NULL)
+	{
+		return CLSS_XML_FILE_OP_OK;
+	}		
+	if(strstr(pucXmlOneLine, "<CountryCode>") != NULL)
+	{
+		return CLSS_OHTER_COUNTRY_CODE;
+	}
+	if(strstr(pucXmlOneLine, "<CurrencyCode>") != NULL)
+	{
+		return CLSS_OHTER_CURRENCY_CODE;
+	}
+	if(strstr(pucXmlOneLine, "<ReferenceCurrencyCode>") != NULL)
+	{
+		return CLSS_OHTER_REF_CURRENCY_CODE;
+	}
+	if(strstr(pucXmlOneLine, "<CurrencyExponent>") != NULL)
+	{
+		return CLSS_OHTER_CURRENCY_EXP;
+	}
+	if(strstr(pucXmlOneLine, "<ReferenceCurrencyExponent>") != NULL)
+	{
+		return CLSS_OHTER_REF_CUR_EXP;
+	}
+	if(strstr(pucXmlOneLine, "<ReferenceCurrenceConverRate>") != NULL)
+	{
+		return CLSS_OHTER_REF_CUR_CONVER_RATE;
+	}
+	if(strstr(pucXmlOneLine, "<MerchantCategoryCode>") != NULL)
+	{
+		return CLSS_OHTER_MER_CAT_CODE;
+	}
+	if(strstr(pucXmlOneLine, "<MerchantId>") != NULL)
+	{
+		return CLSS_OHTER_MERCHANT_ID;
+	}
+	if(strstr(pucXmlOneLine, "<TerminalID>") != NULL)
+	{
+		return CLSS_OHTER_TERMINAL_ID;
+	}
+	if(strstr(pucXmlOneLine, "<MerchantName>") != NULL)
+	{
+		return CLSS_OHTER_MERCHANT_NAME;
+	}
+	if(strstr(pucXmlOneLine, "<MerchantLocalAddress>") != NULL)
+	{
+		return CLSS_OHTER_MERCHANT_LOCAL_ADDR;
+	}
+		
+	return 0;
+
+}
+
+static int ClssOheterConfGetCountryCodevalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CountryCode", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+	
+	return iRet;
+}
+
+static int ClssOheterConfGetCurrencyCodevalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CurrencyCode", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int ClssOheterConfGetReferenceCurrencyCodevalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ReferenceCurrencyCode", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int ClssOheterConfGetCurrencyExponentValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "CurrencyExponent", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+
+static int ClssOheterConfGetReferenceCurrencyExponentValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ReferenceCurrencyExponent", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*pucData = (uchar)atoi(pucBuf);
+
+	return iRet;
+}
+
+static int ClssOheterConfGetReferenceCurrenceConverRatevalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "ReferenceCurrenceConverRate", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+	
+	return iRet;
+}
+
+static int ClssOheterConfGetMerchantCategoryCodevalue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MerchantCategoryCode", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucData);
+
+	return iRet;
+}
+
+static int ClssOheterConfGetMerchantIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MerchantId", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//memcpy(pucData, pucBuf, sizeof(pucData));
+	strcpy(pucData, pucBuf);
+
+	return iRet;
+}
+
+static int ClssOheterConfGetTerminalIDValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "TerminalID", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//memcpy(pucData, pucBuf, sizeof(pucData));
+	strcpy(pucData, pucBuf);
+	
+	return iRet;
+}
+
+
+static int ClssOheterConfGetMerchantNameValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MerchantName", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//memcpy(pucData, pucBuf, sizeof(pucData));
+	strcpy(pucData, pucBuf);
+	
+	return iRet;
+}
+
+static int ClssOheterConfGetMerchantLocalAddressValue(const uchar *pucXmlOneLine, uchar *pucData)
+{
+    int iRet = 0;
+	uchar pucBuf[EMV_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, "MerchantLocalAddress", pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	//memcpy(pucData, pucBuf, sizeof(pucData));
+	strcpy(pucData, pucBuf);
+	
+	return iRet;
+}
+
+
+
+static int ParseClssOhterConfChildNode(const uchar *pucXmlOneLine, void *Data)
+{
+	int iChildNode = 0;
+	int iRet = 0;
+	int iSize = 0;
+	int i = 0;
+	CLSS_OTHER_CONF_NODE_T *pstOtherConfNode = NULL;
+	pstOtherConfNode = (CLSS_OTHER_CONF_NODE_T *)Data;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	iChildNode = ClssGetOtherConfChileNode(pucXmlOneLine);
+	if(iChildNode < 0)
+	{
+		return CLSS_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+	}
+
+	switch(iChildNode)
+	{
+		case CLSS_OHTER_COUNTRY_CODE:
+			iRet = ClssOheterConfGetCountryCodevalue(pucXmlOneLine, pstOtherConfNode->aucCountryCode);
+			break;
+		case CLSS_OHTER_CURRENCY_CODE:
+			iRet = ClssOheterConfGetCurrencyCodevalue(pucXmlOneLine, pstOtherConfNode->aucCurrencyCode);
+			break;
+		case CLSS_OHTER_REF_CURRENCY_CODE:
+			iRet = ClssOheterConfGetReferenceCurrencyCodevalue(pucXmlOneLine, pstOtherConfNode->aucRefCurrencyCode);
+			break;
+		case CLSS_OHTER_CURRENCY_EXP:
+			iRet = ClssOheterConfGetCurrencyExponentValue(pucXmlOneLine, &(pstOtherConfNode->ucCurrencyExponent));
+			break;
+		case CLSS_OHTER_REF_CUR_EXP:
+			iRet = ClssOheterConfGetReferenceCurrencyExponentValue(pucXmlOneLine, &(pstOtherConfNode->ucRefCurrencyExponent));
+			break;
+		case CLSS_OHTER_REF_CUR_CONVER_RATE:
+			iRet = ClssOheterConfGetReferenceCurrenceConverRatevalue(pucXmlOneLine, pstOtherConfNode->aucRefCurrenceConVerRate);
+			break;
+		case CLSS_OHTER_MER_CAT_CODE:
+			iRet = ClssOheterConfGetMerchantCategoryCodevalue(pucXmlOneLine, pstOtherConfNode->aucMerchantCateCode);
+			break;
+		case CLSS_OHTER_MERCHANT_ID:
+			iRet = ClssOheterConfGetMerchantIDValue(pucXmlOneLine, pstOtherConfNode->aucMerchantId);
+			break;
+		case CLSS_OHTER_TERMINAL_ID:
+			iRet = ClssOheterConfGetTerminalIDValue(pucXmlOneLine, pstOtherConfNode->aucTerminalId);
+			break;
+		case CLSS_OHTER_MERCHANT_NAME:
+			iRet = ClssOheterConfGetMerchantNameValue(pucXmlOneLine, pstOtherConfNode->aucMerChantName);
+			break;
+		case CLSS_OHTER_MERCHANT_LOCAL_ADDR:
+			iRet = ClssOheterConfGetMerchantLocalAddressValue(pucXmlOneLine, pstOtherConfNode->aucMerChantLocalAddr);
+			break;
+
+		default:
+			break;
+	}
+	
+	
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseEmvAidChildNode---- GetAidChileNode = %d iSize = %d iRet = %d\n", iChildNode, iSize, iRet);
+#endif
+	
+	return iRet;
+}
+
+
+
+static int FindFunctionIndex(const uchar *pucNodeName, NODE_FUNC_TAB_T *vParseListFuncTab, int iSize)
+{
+	int i = 0;
+
+	for(i = 0; i < iSize; i++)
+	{
+		if(strcmp(pucNodeName, vParseListFuncTab[i].ucNodeName) == 0)
+		{	
+			return i;
+		}
+	}
+	return CLSS_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD;
+}
+
+static int FindNodePositonInFile(const uchar *pucFileName, const uchar *pucNodeName, int iPos)
+{
+	int iFd = 0;
+	int iFileSize = 0;
+	int iSearchLen = 0;
+	uchar ucReadBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar ucTempBuf[EMV_TEMP_BUF_LEN + 1] = {0};
+	uchar ucParseBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar *pucStart  = NULL;
+	uchar *pucLastEnterPos = NULL;
+	int iRet = 0;
+	int iOffset = 0;
+	ulong uiPosition = 0;
+	int iLseek = 0;
+
+	iRet = PdkFile_Exist (pucFileName);
+	if(iRet < 0)
+	{
+		ComDebugTx("Clss FindNodePositonInFile PdkFile_Exist iRet = %d\n", iRet);
+		return iRet;
+	}
+
+	iFd = PdkFile_Open(pucFileName);
+	//ComDebugTx("FindNodePositonInFile PdkFile_Open iFd = %d\n", iFd);
+	if(iFd < 0)
+	{
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(pucFileName);
+	//ComDebugTx("FindNodePositonInFile PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("FindNodePositonInFile PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = PdkFile_Seek (iFd, iPos, SEEK_CUR);
+	//ComDebugTx("FindNodePositonInFile PdkFile_Seek iPos PdkFile_Seek = %d\n", iLseek);
+	if(iLseek < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("FindNodePositonInFile PdkFile_Seek PdkFile_Seek = %d\n", iLseek);
+		return iLseek;
+	}
+
+	while(iSearchLen < iFileSize)
+	{
+		memset(ucReadBuf, 0, sizeof(ucReadBuf));
+		iRet = PdkFile_Read(iFd, ucReadBuf, 1024);
+		//ComDebugTx("FindNodePositonInFile PdkFile_Read ucReadBuf = %s\n", ucReadBuf);
+		//ComDebugTx("FindNodePositonInFile PdkFile_Read iRet = %d\n", iRet);
+		if(iRet < 0)
+		{
+			PdkFile_Close(iFd);
+			ComDebugTx("FindNodePositonInFile PdkFile_Read iRet = %d\n", iRet);
+			return iRet;
+		}
+
+		//every time ,we should confirm the last line is whole line
+		pucLastEnterPos = strrchr(ucReadBuf,'\x0a');
+		if(pucLastEnterPos == NULL)
+		{
+			PdkFile_Close(iFd);
+			return EMV_XML_FILE_OP_ERR_ONELINE_OVER_1024;
+		}
+		
+		memcpy(ucParseBuf, ucReadBuf, pucLastEnterPos - ucReadBuf);
+		//ComDebugTx("FindNodePositonInFile memcpy ucParseBuf = %s\n", ucParseBuf);
+		//ComDebugTx("FindNodePositonInFile memcpy pucNodeName = %s\n", pucNodeName);
+		pucStart = strstr(ucParseBuf, pucNodeName);
+		if(pucStart == NULL)
+		{
+		    //the len have search
+			iOffset = 1024 - (pucLastEnterPos - ucReadBuf);
+			//ComDebugTx("FindNodePositonInFile 1024 - (pucLastEnterPos - ucReadBuf) = %d\n", iOffset);
+			iSearchLen = iSearchLen + (pucLastEnterPos - ucReadBuf);
+			//ComDebugTx("FindNodePositonInFile pucstart = NULL iSearchLen = %d\n", iSearchLen);
+			iLseek = PdkFile_Seek(iFd, -iOffset, SEEK_CUR);
+			if(iLseek < 0)
+			{
+				PdkFile_Close(iFd);
+				ComDebugTx("FindNodePositonInFile PdkFile_Seek -iOffsetPdkFile_Seek = %d\n", iLseek);
+				return iLseek;
+			}
+			continue;
+		}
+		else
+		{
+			//ComDebugTx("FindNodePositonInFile pucstart !=NULl iSearchLen = %d\n", iSearchLen);
+			//ComDebugTx("FindNodePositonInFile pucstart !=NULl (pucStart - ucParseBuf) = %d\n", (pucStart - ucParseBuf));
+			uiPosition = iSearchLen + (pucStart - ucParseBuf);
+			//ComDebugTx("FindNodePositonInFile pucstart !=NULl uiPosition = %d\n", uiPosition);
+			PdkFile_Close(iFd);
+			return uiPosition;
+		}
+	}
+	PdkFile_Close(iFd);
+	return EMV_XML_FILE_OP_ERR_NODE_NOT_EXIST;
+}
+
+static int ParseList(const uchar *pucFileName, const uchar *pucListStart, const uchar *pucListEnd,  const uchar *pucNodeStart, const uchar *pucNodeEnd, int iStartOffset, int iClssType)
+{
+	int iRet = 0;
+	int iListPos = 0;
+	uchar *pucNodeEndTag = NULL;
+	uchar *pucListEndTag = NULL;
+	int iFd = 0;
+	int iFileSize = 0;
+	int iLseek = 0;
+	uchar aucReadBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar aucParseBuf[EMV_FILE_READ_BUF_LEN + 1] = {0};
+	uchar aucXmlLineBuf[EMV_FILE_ONELINE_BUF_LEN] = {0};
+	uchar *pucStart = NULL;
+	uchar *pucLastEnterPos = NULL;
+	int iSearchLen = 0;
+	int iLen = 0;
+	int iHaveGetLen = 0;
+	int iOffset = 0;
+	int iIndex = 0;
+	int iReadLen = 0;
+	NODE_FUNC_TAB_T *vParseListFuncTab = NULL;
+	int iFunSize = 0;
+
+	PAYPASS_AID_NODE_T stPaypassAidNode = {0};
+	PAYPASS_CONF_T stPayPassConf = {0};
+	PAYWAVE_AID_NODE_T stPayWaveAidNode = {0};
+	PAYWAVE_INTER_WARE_NODE_T stPayWaveInterWare = {0};
+	PAYWAVE_PROGREAM_ID_NODE_T stPayWavePrgId = {0};
+	PAYWAVE_TERM_CAPABILITY_NODE_T stPayWaveTermCap = {0};
+	CLSS_OTHER_CONF_NODE_T stClssOtherConf = {0};
+
+	NODE_FUNC_TAB_T vParsePayPassListFuncTab[] =
+	{
+		{"<AID>", ParsePayPassAidChildNode, &stPaypassAidNode, sizeof(stPaypassAidNode)},
+		{"<PAYPASSCONFIGURATION>", ParsePayPassConfChildNode, &stPayPassConf, sizeof(stPayPassConf)},
+	};
+
+	NODE_FUNC_TAB_T vParsePayWaveListFuncTab[] =
+	{
+		{"<AID>", ParsePayWaveAidChildNode, &stPayWaveAidNode, sizeof(stPayWaveAidNode)},
+		{"<PROGRAMID>", ParsePayWaveProgramIdChildNode, &stPayWavePrgId, sizeof(stPayWavePrgId)},
+		{"<TERMINALCAPABILITIES>", ParsePayWaveTermCapChildNode, &stPayWaveTermCap, sizeof(stPayWaveTermCap)},
+	};
+
+	NODE_FUNC_TAB_T vParseCommonListFuncTab[] =
+	{
+		{"<OTHERCONFIGURATION>", ParseClssOhterConfChildNode, &stClssOtherConf, sizeof(stClssOtherConf)},
+	};
+
+	switch(iClssType)
+	{
+		case CLSS_PAYPASS:
+			vParseListFuncTab = vParsePayPassListFuncTab;
+			iFunSize = sizeof(vParsePayPassListFuncTab)/sizeof(vParsePayPassListFuncTab[0]);
+			break;
+		case CLSS_PAYWAVE:
+			vParseListFuncTab = vParsePayWaveListFuncTab;
+			iFunSize = sizeof(vParsePayWaveListFuncTab)/sizeof(vParsePayWaveListFuncTab[0]);
+			break;
+		case CLSS_COMMON:
+			vParseListFuncTab = vParseCommonListFuncTab;
+			iFunSize = sizeof(vParsePayWaveListFuncTab)/sizeof(vParsePayWaveListFuncTab[0]);
+			break;
+		default:
+			return CLSS_XML_FILE_OP_ERR_CLSS_TYPE_NOT_EXIST;
+	}
+
+	if(pucNodeStart == NULL || pucNodeEnd == NULL)
+	{
+		ComDebugTx("ParseList EMV_XML_FILE_OP_ERR_INVALID_PARAM NULL\n");
+		return EMV_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	if(pucListStart != NULL)
+	{
+		iListPos = FindNodePositonInFile(pucFileName, pucListStart, iStartOffset);
+		if(iListPos < 0)
+		{
+			ComDebugTx("ParseList FindNodePositonInFile != NULL iListPos = %d\n", iListPos);
+			return iListPos;
+		}
+		iListPos = iListPos + iStartOffset;
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseList FindNodePositonInFile != NULL iListPos = %d\n", iListPos);
+		#endif
+	}
+	else
+	{
+		iListPos = FindNodePositonInFile(pucFileName, pucNodeStart, iStartOffset);
+		if(iListPos < 0)
+		{
+			ComDebugTx("ParseList FindNodePositonInFile != NULL iListPos = %d\n", iListPos);
+			return iListPos;
+		}
+		iListPos = iListPos + iStartOffset;
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseList FindNodePositonInFile == NULL iListPos = %d\n", iListPos);
+		#endif
+	}
+	
+	iFd = PdkFile_Open(pucFileName);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseList PdkFile_Open iFd = %d\n", iFd);
+	#endif
+	if(iFd < 0)
+	{
+		ComDebugTx("ParseList PdkFile_Open iFd = %d\n", iFd);
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(pucFileName);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseList PdkFile_GetSize iFileSize = %d\n", iFileSize);
+	#endif
+	if(iFileSize < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("ParseList PdkFile_GetSize iFileSize = %d\n", iFileSize);
+		return iFileSize;
+	}
+
+	iLseek = PdkFile_Seek (iFd, iListPos, SEEK_CUR);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseList PdkFile_Seek PdkFile_Seek = %d\n", iLseek);
+	#endif
+	if(iLseek < 0)
+	{
+		PdkFile_Close(iFd);
+		ComDebugTx("ParseList PdkFile_Seek PdkFile_Seek = %d\n", iLseek);
+		return iFileSize;
+	}
+
+	//while((iReadLen + iListPos) < iFileSize)
+	while((iReadLen) < iFileSize)
+	{
+		memset(aucReadBuf, 0, sizeof(aucReadBuf));
+		iRet = PdkFile_Read(iFd, aucReadBuf, 1024);
+		if(iRet < 0)
+		{
+			PdkFile_Close(iFd);
+			ComDebugTx("ParseList PdkFile_Read iRet = %d\n", iRet);
+			return iRet;
+		}
+		iReadLen +=  iRet;
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseList PdkFile_Read iReadLen = %d\n", iReadLen);
+		ComDebugTx("ParseList PdkFile_Read ucReadBuf = %s\n", aucReadBuf);
+		#endif
+
+		//every time ,we should confirm the last line is whole line
+		pucLastEnterPos = strrchr(aucReadBuf,'\x0a');
+		if(pucLastEnterPos == NULL)
+		{
+			PdkFile_Close(iFd);
+			ComDebugTx("ParseList pucLastEnterPos == NULL\n");
+			return EMV_XML_FILE_OP_ERR_ONELINE_OVER_1024;
+		}
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseList pucLastEnterPos != NULL\n");
+		#endif
+		memset(aucParseBuf, 0, sizeof(aucParseBuf));
+		memcpy(aucParseBuf, aucReadBuf, pucLastEnterPos - aucReadBuf + 1);
+		#ifdef CLSS_XML_FILE_OP_DEBUG
+		ComDebugTx("ParseList  ucParseBuf = %s\n", aucParseBuf);
+		ComDebugTx("ParseList  pucNodeStart = %s\n", pucNodeStart);
+		#endif
+			
+		while((iHaveGetLen) < (pucLastEnterPos - aucReadBuf + 1))
+		{
+			memset(aucXmlLineBuf, 0, sizeof(aucXmlLineBuf));
+			//offset mean hava get len,the parsebuf's data every line is whole line   include \r\n
+			#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("ParseList  XmlGetOneLineData iHaveGetLen = %d\n", iHaveGetLen);
+			#endif
+			iRet = XmlGetOneLineData(aucParseBuf + iHaveGetLen, &iLen, aucXmlLineBuf);
+			#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("ParseList  XmlGetOneLineData ucXmlLineBuf = %s\n", aucXmlLineBuf);
+			ComDebugTx("ParseList  XmlGetOneLineData iLen = %d\n", iLen);
+			#endif
+
+			if(iRet < 0)
+			{
+				ComDebugTx("ParseList XmlGetOneLineData iRet < 0 = %d\n", iRet);
+				PdkFile_Close (iFd);
+				return iRet;
+			}
+			iHaveGetLen += iLen;
+			#ifdef CLSS_XML_FILE_OP_DEBUG
+			ComDebugTx("ParseList iHaveGetLen iHaveGetLen = %d\n", iHaveGetLen);
+			ComDebugTx("ParseList iHaveGetLen (pucLastEnterPos - ucReadBuf) = %d\n", (pucLastEnterPos - aucReadBuf + 1));
+			#endif
+
+			//init the buf that use to save data
+			if(strstr(aucXmlLineBuf, pucNodeStart) != NULL)
+			{
+				#ifdef CLSS_XML_FILE_OP_DEBUG
+				ComDebugTx("ParseList init buf \n");
+				#endif
+				iIndex = FindFunctionIndex(pucNodeStart, vParseListFuncTab, iFunSize);
+				#ifdef CLSS_XML_FILE_OP_DEBUG
+				ComDebugTx("ParseList  FindFunctionIndex 11111 iIndex = %d\n", iIndex);
+				#endif
+				if(iIndex == EMV_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD)
+				{
+					ComDebugTx("ParseList  FindFunctionIndex 11111 iIndex EMV_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD = %d\n", iIndex);
+					PdkFile_Close(iFd);
+					return EMV_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD;
+				}
+				memset(vParseListFuncTab[iIndex].pOutData ,0,vParseListFuncTab[iIndex].iLen);
+				//continue;
+			}
+
+			//for list
+			if((pucListEnd != NULL) && (pucListStart != NULL))
+			{
+				//ComDebugTx("ParseList  pucListEnd pucListEnd = %s\n", pucListEnd);
+				pucListEndTag = strstr(aucXmlLineBuf, pucListEnd);
+				if(pucListEndTag != NULL)
+				{
+					PdkFile_Close(iFd);
+					//ComDebugTx("ParseList  pucListEndTag pucListEndTag = NULL\n");
+					return EMV_XML_FILE_LIST_END;
+				}
+                #ifdef CLSS_XML_FILE_OP_DEBUG
+				ComDebugTx("ParseList  pucNodeEnd pucNodeEnd = %s\n", pucNodeEnd);
+				#endif
+				pucNodeEndTag = strstr(aucXmlLineBuf, pucNodeEnd);
+				if(pucNodeEndTag != NULL)
+				{
+					//ComDebugTx("ParseList  pucNodeEndTag pucNodeEndTag != NULL return XML_PARSE_OK\n");
+					iRet = PrintNodeStruct(pucNodeStart, iClssType, vParseListFuncTab[iIndex].pOutData, vParseListFuncTab[iIndex].iLen);
+					giPayWaveInterWareIndex = 0;
+					if(iRet < 0)
+					{
+						PdkFile_Close(iFd);
+						ComDebugTx("ParseList  PrintNodeStruct iRet = %d\n", iRet);
+						return iRet;
+					}
+					//continue;
+				}
+				else
+				{
+					#ifdef CLSS_XML_FILE_OP_DEBUG
+					ComDebugTx("vFunParseNodeCb begin for list\n");
+					#endif
+					iIndex = FindFunctionIndex(pucNodeStart, vParseListFuncTab, iFunSize);
+					#ifdef CLSS_XML_FILE_OP_DEBUG
+					ComDebugTx("ParseList  FindFunctionIndex iIndex = %d\n", iIndex);
+					#endif
+					if(iIndex == EMV_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD)
+					{
+						ComDebugTx("ParseList  for list FindFunctionIndex iIndex EMV_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD = %d\n", iIndex);
+						PdkFile_Close(iFd);
+						return EMV_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD;
+					}
+				    if((strstr(aucXmlLineBuf, pucNodeStart) == NULL) && (strstr(aucXmlLineBuf, pucListStart) == NULL))
+				    {
+						iRet = vParseListFuncTab[iIndex].vFunc(aucXmlLineBuf, vParseListFuncTab[iIndex].pOutData);
+						#ifdef CLSS_XML_FILE_OP_DEBUG
+						ComDebugTx("ParseList  vParseNodeFuncTab for list iRet = %d\n", iRet);
+						#endif
+						if(iRet < 0)
+						{
+							ComDebugTx("ParseList  vParseNodeFuncTab for list iRet < 0 = %d\n", iRet);
+							return iRet;
+						}
+						
+				    }
+				}
+			}
+			else//for node
+			{
+				pucNodeEndTag = strstr(aucXmlLineBuf, pucNodeEnd);
+				if(pucNodeEndTag != NULL)
+				{
+					#ifdef CLSS_XML_FILE_OP_DEBUG
+					ComDebugTx("ParseList  pucNodeEndTag pucNodeEndTag != NULL return XML_PARSE_OK\n");
+					#endif
+					iRet = PrintNodeStruct(pucNodeStart, iClssType, vParseListFuncTab[iIndex].pOutData, vParseListFuncTab[iIndex].iLen);
+					if(iRet < 0)
+					{
+						ComDebugTx("ParseList  for node PrintNodeStruct iRet = %d\n", iRet);
+						PdkFile_Close(iFd);
+						return iRet;
+					}
+					PdkFile_Close(iFd);
+					return EMV_XML_FILE_NODE_END;
+				}
+				else
+				{
+					#ifdef CLSS_XML_FILE_OP_DEBUG
+					ComDebugTx("else vFunParseNodeCb begin for node\n");
+					#endif
+					iIndex = FindFunctionIndex(pucNodeStart, vParseListFuncTab, iFunSize);
+					#ifdef CLSS_XML_FILE_OP_DEBUG
+					ComDebugTx("ParseList  FindFunctionIndex iIndex = %d\n", iIndex);
+					#endif
+					if(iIndex == EMV_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD)
+					{
+						ComDebugTx("ParseList  FindFunctionIndex EMV_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD iIndex = %d\n", iIndex);
+						PdkFile_Close(iFd);
+						return EMV_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD;
+					}
+					if(strstr(aucXmlLineBuf, pucNodeStart) == NULL)
+					{
+						iRet = vParseListFuncTab[iIndex].vFunc(aucXmlLineBuf, vParseListFuncTab[iIndex].pOutData);
+						#ifdef CLSS_XML_FILE_OP_DEBUG
+						ComDebugTx("ParseList  vParseNodeFuncTab for node iRet = %d\n", iRet);
+						#endif
+						if(iRet < 0)
+						{
+							ComDebugTx("ParseList  vParseNodeFuncTab for node iRet = %d\n", iRet);
+							return iRet;
+						}			
+						
+					}
+				}
+			}
+
+			//have finish one parsebuf, reset data  //dui de wei zhi
+			if(iHaveGetLen == (pucLastEnterPos - aucReadBuf + 1))
+			{
+				iRet = PdkFile_Seek (iFd, iHaveGetLen - 1024, SEEK_CUR);
+				#ifdef CLSS_XML_FILE_OP_DEBUG
+				ComDebugTx("ParseList PdkFile_Seek iHaveGetLen - 1024, SEEK_CUR = %d\n", iRet);
+				#endif
+				iHaveGetLen = 0;
+				break;
+			}
+		}
+		//parse one aid
+	}
+	PdkFile_Close(iFd);
+	return iRet;
+}
+
+static int ParsePayPassAidList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	int iAidIndex = 0;
+	int iNodeEnd = -1;
+	int iIndex = 0;
+	int iStartOffset = 0;
+	
+
+	iStartOffset = FindNodePositonInFile(pucFileName, "<PAYPASSPARAM>", 0);
+	if(iStartOffset < 0)
+	{
+		ComDebugTx("ParsePayPassAidList FindNodePositonInFile iListPos = %d\n", iStartOffset);
+		return iStartOffset;
+	}
+	//ComDebugTx("ParsePayPassAidList---- FindNodePositonInFile iStartOffset  = %d \n", iStartOffset);
+	
+	iRet = ParseList(pucFileName, "<AIDLIST>", "</AIDLIST>", "<AID>", "</AID>", iStartOffset, CLSS_PAYPASS);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayPassAidList----ParseList iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParsePayPassAidList----ParseList iRet  = %d \n", iRet );
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("PAYPASS_AID", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayPassAidList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+	#endif
+	if(iIndex < 0)
+	{
+		return iIndex;
+	}
+	gstNoeRecord[iIndex].count = giAidIndex;
+	
+	iRet = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)&gstNoeRecord, sizeof(gstNoeRecord), 0);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayPassAidList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParsePayPassAidList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+		return iRet;
+	}
+	return iRet;
+}
+
+static int ParsePaypassConfList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	int iIndex = 0;
+	int iStartOffset = 0;
+	int iEndOffset = 0;
+
+	iStartOffset = FindNodePositonInFile(pucFileName, "<PAYPASSPARAM>", 0);
+	if(iStartOffset < 0)
+	{
+		ComDebugTx("ParsePaypassConfList FindNodePositonInFile iStartOffset = %d\n", iStartOffset);
+		return iStartOffset;
+	}
+	//ComDebugTx("ParsePaypassConfList---- FindNodePositonInFile iStartOffset  = %d \n", iStartOffset);
+	
+	iRet = ParseList(pucFileName, NULL, NULL, "<PAYPASSCONFIGURATION>", "</PAYPASSCONFIGURATION>", iStartOffset, CLSS_PAYPASS);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePaypassConfList---- iRet = %d \n", iRet);
+	#endif
+	
+
+	iIndex = ClssGetRecordIndex("PAYPASS_PAYPASSCONFIGURATION", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePaypassConfList----ClssGetRecordIndexClssGetRecordIndex iIndex  = %d \n", iIndex );
+	#endif
+	if(iIndex < 0)
+	{
+		ComDebugTx("ParsePaypassConfList----ClssGetRecordIndexClssGetRecordIndex iIndex  = %d \n", iIndex );
+		return iIndex;
+	}
+	gstNoeRecord[iIndex].count = giPayPassConfIndex;
+	iRet = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)&gstNoeRecord, sizeof(gstNoeRecord), 0);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePaypassConfList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParsePaypassConfList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+		return iRet;
+	}
+	return iRet;
+}
+
+
+
+static int ParsePayWaveAidList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	int iAidIndex = 0;
+	int iNodeEnd = -1;
+	int iIndex = 0;
+	int iStartOffset = 0;
+	int iEndOffset = 0;
+
+	iStartOffset = FindNodePositonInFile(pucFileName, "<PAYWAVEPARAM>", 0);
+	if(iStartOffset < 0)
+	{
+		ComDebugTx("ParsePayWaveAidList FindNodePositonInFile iListPos = %d\n", iStartOffset);
+		return iStartOffset;
+	}
+	//ComDebugTx("ParsePayWaveAidList---- FindNodePositonInFile iStartOffset  = %d \n", iStartOffset );
+	
+	iRet = ParseList(pucFileName, "<AIDLIST>", "</AIDLIST>", "<AID>", "</AID>", iStartOffset, CLSS_PAYWAVE);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWaveAidList----ParseList iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParsePayWaveAidList---- iRet = %d \n", iRet);
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("PAYWAVE_AID", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWaveAidList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+	#endif
+	if(iIndex < 0)
+	{
+		ComDebugTx("ParsePayWaveAidList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+		return iIndex;
+	}
+	gstNoeRecord[iIndex].count = giPayWaveAidIndex;
+
+	iIndex = ClssGetRecordIndex("PAYWAVE_INTER_WARE", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWaveAidList----ClssGetRecordIndex  PAYWAVE_INTER_WARE iIndex  = %d \n", iIndex );
+	#endif
+	if(iIndex < 0)
+	{
+		ComDebugTx("ParsePayWaveAidList----ClssGetRecordIndex  PAYWAVE_INTER_WARE iIndex  = %d \n", iIndex );
+		return iIndex;
+	}
+	gstNoeRecord[iIndex].count = giPayWaveInterWareIndex;
+	
+	iRet = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)&gstNoeRecord, sizeof(gstNoeRecord), 0);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayPassAidList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParsePayPassAidList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+		return iRet;
+	}
+	return iRet;
+}
+
+static int ParsePayWavePrgIdList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	int iAidIndex = 0;
+	int iNodeEnd = -1;
+	int iIndex = 0;
+	int iStartOffset = 0;
+	
+
+	iStartOffset = FindNodePositonInFile(pucFileName, "<PAYWAVEPARAM>", 0);
+	if(iStartOffset < 0)
+	{
+		ComDebugTx("ParsePayWavePrgIdList FindNodePositonInFile  iStartOffset = %d\n", iStartOffset);
+		return iStartOffset;
+	}
+	//ComDebugTx("ParsePayWavePrgIdList---- FindNodePositonInFile iStartOffset  = %d \n", iStartOffset);
+	
+	iRet = ParseList(pucFileName, "<PROGRAMIDLIST>", "</PROGRAMIDLIST>", "<PROGRAMID>", "</PROGRAMID>", iStartOffset, CLSS_PAYWAVE);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWavePrgIdList----ParseList iRet  = %d \n", iRet );
+	#endif
+
+	iIndex = ClssGetRecordIndex("PAYWAVE_PROGRAMID", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWavePrgIdList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+	#endif
+	if(iIndex < 0)
+	{
+		ComDebugTx("ParsePayWavePrgIdList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+		return iIndex;
+	}
+	gstNoeRecord[iIndex].count = giPayWavePrgIdIndex;
+	
+	iRet = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)&gstNoeRecord, sizeof(gstNoeRecord), 0);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWavePrgIdList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParsePayWavePrgIdList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+		return iRet;
+	}
+	return iRet;
+}
+
+static int ParsePayWaveTermCapList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	int iAidIndex = 0;
+	int iNodeEnd = -1;
+	int iIndex = 0;
+	int iStartOffset = 0;
+	
+
+	iStartOffset = FindNodePositonInFile(pucFileName, "<PAYWAVEPARAM>", 0);
+	if(iStartOffset < 0)
+	{
+		ComDebugTx("ParsePayWaveTermCapList FindNodePositonInFile  iStartOffset = %d\n", iStartOffset);
+		return iStartOffset;
+	}
+	//ComDebugTx("ParsePayWaveTermCapList---- FindNodePositonInFile iStartOffset  = %d \n", iStartOffset);
+	
+	iRet = ParseList(pucFileName, NULL, NULL, "<TERMINALCAPABILITIES>", "</TERMINALCAPABILITIES>", iStartOffset, CLSS_PAYWAVE);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWaveTermCapList----ParseList iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParsePayWaveTermCapList----ParseList iRet  = %d \n", iRet );
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("PAYWAVE_TERM_CAP", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWaveTermCapList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+	#endif
+	if(iIndex < 0)
+	{
+		ComDebugTx("ParsePayWaveTermCapList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+		return iIndex;
+	}
+	gstNoeRecord[iIndex].count = giPayWaveTermCapIndex;
+	
+	iRet = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)&gstNoeRecord, sizeof(gstNoeRecord), 0);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParsePayWaveTermCapList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParsePayWaveTermCapList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+		return iRet;
+	}
+	return iRet;
+}
+
+static int ParseClssOhterConfList(const uchar *pucFileName)
+{
+	int iRet = 0;
+	int iAidIndex = 0;
+	int iNodeEnd = -1;
+	int iIndex = 0;
+	int iStartOffset = 0;
+	
+
+	iStartOffset = FindNodePositonInFile(pucFileName, "<OTHERCONFIGURATION>", 0);
+	if(iStartOffset < 0)
+	{
+		ComDebugTx("ParseClssOhterConfList FindNodePositonInFile  iListPos = %d\n", iStartOffset);
+		return iStartOffset;
+	}
+	//ComDebugTx("ParseClssOhterConfList---- FindNodePositonInFile iStartOffset  = %d \n", iStartOffset);
+	
+	iRet = ParseList(pucFileName, NULL, NULL, "<OTHERCONFIGURATION>", "</OTHERCONFIGURATION>", iStartOffset, CLSS_COMMON);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseClssOhterConfList----ParseList iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParseClssOhterConfList----ParseList iRet  = %d \n", iRet );
+		return iRet;
+	}
+
+	iIndex = ClssGetRecordIndex("CLSS_OHTER_CONF", sizeof(gstNoeRecord)/sizeof(gstNoeRecord[0]));
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseClssOhterConfList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+	#endif
+	if(iIndex < 0)
+	{
+		ComDebugTx("ParseClssOhterConfList----ClssGetRecordIndex iIndex  = %d \n", iIndex );
+		return iIndex;
+	}
+	gstNoeRecord[iIndex].count = giClssOhterConfIndex;
+	
+	iRet = SaveParsedDataToFile(CLSS_XML_FILE_HAVE_PARSED, (uchar*)&gstNoeRecord, sizeof(gstNoeRecord), 0);
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("ParseClssOhterConfList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+	#endif
+	if(iRet < 0)
+	{
+		ComDebugTx("ParseClssOhterConfList---- SaveParsedDataToFile iRet  = %d \n", iRet );
+		return iRet;
+	}
+	return iRet;
+}
+
+
+
+
+static void InitGloableVar(void)
+{
+	giAidIndex = 0;
+ 	giPayPassConfIndex = 0;
+	giPayWaveAidIndex = 0;
+	giParsePos = 0;
+    giPayWavePrgIdIndex = 0;
+    giPayWaveTermCapIndex = 0;
+    giClssOhterConfIndex = 0;
+	giCurrentOffset = sizeof(gstNoeRecord);
+}
+
+//init the file whic used to stored the have parsed data,save the node info in the start position of file
+static int InitClssParsedFile(const uchar *pucFileName)
+{
+	int iFd = 0;
+	int iRet = 0;
+
+	if(PdkFile_Exist(pucFileName) == PDK_RET_OK)
+	{
+		PdkFile_Remove (pucFileName);
+	}
+
+	iFd = PdkFile_Open(pucFileName);
+	if(iFd < 0)
+	{
+		ComDebugTx("InitEmvParsedFile PdkFile_Open iFd = %d\n", iFd);
+		return iFd;
+	}
+	#ifdef CLSS_XML_FILE_OP_DEBUG
+	ComDebugTx("InitEmvParsedFile sizeof(gstNoeRecord) = %d\n", sizeof(gstNoeRecord));
+	#endif
+	iRet = PdkFile_Write (iFd, (uchar*)&gstNoeRecord, sizeof(gstNoeRecord));
+	if(iRet < 0)
+	{
+		ComDebugTx("InitEmvParsedFile sizeof(gstNoeRecord) = %d\n", sizeof(gstNoeRecord));
+		PdkFile_Close(iFd);
+		return iRet;
+	}
+	PdkFile_Close(iFd);
+	return iRet;
+}
+
+
+int ParseClssFile(const uchar *pucFileName)
+{
+	int iRet = 0;
+
+	int iFlag = 1;
+
+    while(iFlag)
+    {
+        InitGloableVar();
+	    iRet = InitClssParsedFile(CLSS_XML_FILE_HAVE_PARSED);
+		if(iRet < 0)
+		{
+			return iRet;
+		}
+		iRet = ParsePayPassAidList(pucFileName);
+		if(iRet < 0)
+		{
+			return iRet;
+		}
+		
+		iRet = ParsePaypassConfList(pucFileName);
+		if(iRet < 0)
+		{
+			return iRet;
+		}
+				
+		iRet = ParsePayWaveAidList(pucFileName);
+		if(iRet < 0)
+		{
+			return iRet;
+		}
+		
+		iRet = ParsePayWavePrgIdList(pucFileName);
+		if(iRet < 0)
+		{
+			return iRet;
+		}	
+		
+		iRet = ParsePayWaveTermCapList(pucFileName);
+		if(iRet < 0)
+		{
+			return iRet;
+		}
+				
+	    iRet = ParseClssOhterConfList(pucFileName);
+		if(iRet < 0)
+		{
+			return iRet;
+		}
+		
+		iFlag = 0;
+		#ifdef CLSS_TEST
+		TestGetPayPassAid();
+		TestGetPayPassConf();
+		TestGetPayWaveAid();
+		TestGetPayWavePrgId();
+		TestGetPayWaveTermCap();
+		TestGetOherConf();
+		#endif
+/*        
+		if(getkey()== KEYENTER)
+		{
+			iFlag = 1;
+		}
+
+*/		
+    }
+	return iRet;
+}
+

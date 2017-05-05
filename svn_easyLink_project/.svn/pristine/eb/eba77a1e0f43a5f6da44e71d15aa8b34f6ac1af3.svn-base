@@ -1,0 +1,352 @@
+#include <posapi.h>
+#include "..\inc\ped_encrypt.h"
+#include "..\inc\global.h"
+#define TEST
+#define EUI
+
+int GetPinBlock(const char *pRequest,char *pResponse,uint *pRspLen)
+{
+	uchar szInputCardNo[24+1];
+	int iRet=0,iPinEnType=0;
+
+#ifdef PED_ENC_DEBUG_
+	AppLog("[GetPinBlock] pRequest[0]=%02x\n", pRequest[0]);
+#endif
+
+	*pRspLen=0;
+	memset(szInputCardNo,0,sizeof(szInputCardNo));
+	if(pRequest[0]!=0)             
+	{
+		if(pRequest[0]<13 || pRequest[0]>19) 
+		{
+			*pRspLen=4;
+			return EL_SECURITY_RET_PARAM_INVALID;
+		}
+		memcpy(szInputCardNo,pRequest+1,pRequest[0]); 
+	}
+	else   /*如果上位机不提供卡号，pRequest[0]为0（卡号长度为0），此时从应用参数中去取*/
+	{
+		memcpy(szInputCardNo,g_tTransParam.ucTrackTwoData,strlen((char*)g_tTransParam.ucTrackTwoData));//从应用中获取卡号
+	}
+	iRet=PedEncryptPin(szInputCardNo,pResponse,pResponse+8);
+#ifdef PED_ENC_DEBUG_
+	AppLog("[GetPinBlock] PedEncryptPin=%d, szInputCardNo=%s\n", iRet, szInputCardNo);
+#endif
+	if(iRet!=EL_RET_OK)
+	{
+		return iRet;
+	}
+  /*从秘钥类型判定长度，秘钥索引需要从应用参数中取*/
+	iPinEnType=g_tAppParam.ucPINEncryptionType[0];
+	switch(iPinEnType)
+	{
+	case APPPARAM_PIN_ENCRYPT_TYPE_TDES:
+		*pRspLen=8;
+		break;
+	case APPPARAM_PIN_ENCRYPT_TYPE_DUKPT:
+		*pRspLen=18;
+		break;
+	default:
+		*pRspLen=0;
+		break;
+	}
+	return iRet;
+}
+
+
+/******************************************************************
+1．pCardNo 代表传入的卡号
+2．pucPinBlockOut 代表输出加密后PinBlock数据
+3. KsnOut代表输出的Ksn数据(如果是TDS加密就不用获取Ksn)
+******************************************************************/
+
+
+int PedEncryptPin(const uchar *pCardNo, uchar *pucPinBlockOut,uchar *pKsnOut) 
+{
+	int	  iPinKeyIndex=0,iPinEnType=0;
+	int   iRet=0,iResRet=0,i=0,j=0;
+	uchar szPinBlockOut[8];
+	uchar szKsnOutPut[10];
+	uchar szInputCardNo[24+1];
+	uchar szShiftCardNo[19+1];
+	uchar pMode=0,szRandData[8];
+
+#ifdef PED_ENC_DEBUG_
+	AppLog("[PedEncryptPin] pCardNo=%s\n", pCardNo);
+#endif
+
+    if((strlen((uchar*)pCardNo)<13 || strlen((uchar*)pCardNo)>19) || pucPinBlockOut==NULL || pKsnOut==NULL) 
+	{
+			return EL_SECURITY_RET_PARAM_INVALID;
+	}
+
+	 memset(szPinBlockOut,0,sizeof(szPinBlockOut));
+	 memset(szKsnOutPut,0,sizeof(szKsnOutPut));
+	 memset(szShiftCardNo,0,sizeof(szShiftCardNo));
+	 memset(szInputCardNo,0,sizeof(szInputCardNo));
+	 memcpy(szInputCardNo,pCardNo,strlen((char*)pCardNo));
+
+	 if(g_tAppParam.ucPINBlockMode[0] == 0x01 || g_tAppParam.ucPINBlockMode[0] == 0x02)	// Edit by ZhangYuan 2016-10-18 most of the time, the pMode would be 0x00, no need to generate the random number
+	 {
+		for(i=0;i<8;i++)  //生成8个0xA到0xF的随机数
+		{
+			while(1)
+			{
+				if((j=rand()&0x0F)>=0x0A )
+				{
+					szRandData[i]=j;
+					break;
+				}
+			}
+		}
+	 }
+	 
+	 iRet=PubExtractPAN(szInputCardNo,szShiftCardNo);
+#ifdef PED_ENC_DEBUG_
+	 AppLog("[PedEncryptPin] PubExtractPAN=%d, szInputCardNo=%s, szShiftCardNo=%s\n", iRet, szInputCardNo, szShiftCardNo);
+#endif
+	 if(iRet)           /*截取pan错误*/
+	 {
+		 return EL_SECURITY_RET_PARAM_INVALID; 
+	 }
+	 memset(szInputCardNo,0,sizeof(szInputCardNo));
+         /*秘钥索引和pin加密模式需要从应用参数中去取*/
+	 iPinKeyIndex=g_tAppParam.ucPINEncryptionKeyIdx[0]; 
+	 iPinEnType=g_tAppParam.ucPINEncryptionType[0];
+	 pMode=g_tAppParam.ucPINBlockMode[0];
+
+#ifdef PED_ENC_DEBUG_
+	  AppLog("[PedEncryptPin] iPinKeyIndex=%02x, iPinEnType=%02x, pMode=%02x\n", iPinKeyIndex, iPinEnType, pMode);
+#endif
+
+	 /****************************************
+	 mode:	0x00 ISO9564 格式0 
+			0x01 ISO9564 格式1 
+			0x02 ISO9564 格式3
+			0x03 HK EPS专用格式
+	 ****************************************/
+	 switch(pMode)/*mode 需要在应用参数中取*/
+	 {
+	 case 0x00:  //位移位后的16位主账号
+		 memcpy(szInputCardNo,szShiftCardNo,16);
+		 break;
+	 case 0x01:                  //8bytes.可以是随机数\交易流水号、时间戳
+		 memcpy(szInputCardNo,szRandData,8);
+		 break;
+	 case 0x02:    //为卡号移位后的16位加上8字节任意数（每个字节高四位和第四位必须在0xA--0xF）
+		 memcpy(szInputCardNo,szShiftCardNo,16);
+		 memcpy(szInputCardNo+16,szRandData,8);
+		 break;
+#ifdef TEST           /*流水号从应用参数中取*/
+	 case 0x03://为交易流水号ISN（6 Byte）
+		 memcpy(szInputCardNo,szShiftCardNo,6);  //iSN
+		 break;
+#endif
+	 default:
+		 return EL_SECURITY_RET_PARAM_INVALID;  //err mode
+	 }
+
+	///*秘钥索引需要从应用参数中取*/
+	switch(iPinEnType)
+	{
+	case APPPARAM_PIN_ENCRYPT_TYPE_TDES:  //移位后的pCardNo
+		#ifndef EUI
+		// TODO
+		#else
+		ScrCls();
+		ScrPrint(0,0,0,"pls input:");
+		ScrGotoxy(55, 4);
+		#endif
+		
+		iRet=PedGetPinBlock(iPinKeyIndex, "0,4,5,6,7,8,9,10,11,12",szInputCardNo, szPinBlockOut,pMode,60000);
+		#ifdef PED_ENC_DEBUG_
+	  	AppLog("[PedEncryptPin] PedGetPinBlock=%d\n", iRet);
+		if(iRet == PED_RET_OK)
+		{
+			AppHexLog("[PedEncryptPin] PIN BLOCK: ", szPinBlockOut, 8);
+		}
+		#endif
+		
+		#ifndef EUI
+		// TODO
+		#else // EUI_
+   		ScrCls();
+		#endif // EUI_
+
+		break;
+		
+	case APPPARAM_PIN_ENCRYPT_TYPE_DUKPT:
+		iRet=PedGetPinDukpt(iPinKeyIndex, "0,4,5,6,7,8,9,10,11,12",szInputCardNo, szKsnOutPut, szPinBlockOut,pMode,60000);
+		#ifdef PED_ENC_DEBUG_
+		AppLog("[PedEncryptPin] PedGetPinDukpt=%d, iPinEnType=%02x, pMode=%02x\n", iRet);
+		if(iRet == PED_RET_OK)
+		{
+			AppHexLog("[PedEncryptPin] PIN BLOCK: ", szPinBlockOut, 8);
+			AppHexLog("[PedEncryptPin] KSN: ", szPinBlockOut, 10);
+		}
+		#endif
+		break;
+
+	default:
+		return EL_SECURITY_RET_PARAM_INVALID;   //err encrypt index
+	}
+
+	switch(iRet)
+	{
+	case PED_RET_ERR_NO_KEY:
+		iResRet = EL_SECURITY_RET_NO_KEY;
+		break;
+		
+	case PED_RET_ERR_NO_PIN_INPUT:
+		iResRet = EL_SECURITY_RET_NO_PIN_INPUT;
+		break;
+		
+	case PED_RET_ERR_INPUT_CANCEL:
+		iResRet = EL_SECURITY_RET_INPUT_CANCEL;
+		break;
+		
+	case PED_RET_ERR_INPUT_TIMEOUT:
+		iResRet = EL_SECURITY_RET_INPUT_TIMEOUT;
+		break;
+		
+	case PED_RET_OK:
+		iResRet = EL_RET_OK;
+		if(APPPARAM_PIN_ENCRYPT_TYPE_TDES == iPinEnType)
+		{
+			memcpy(pucPinBlockOut,szPinBlockOut,8);
+		}
+		else if(APPPARAM_PIN_ENCRYPT_TYPE_DUKPT == iPinEnType)
+		{
+			memcpy(pucPinBlockOut,szPinBlockOut,8);
+			memcpy(pKsnOut,szKsnOutPut,10);
+		}
+		break;
+		
+	default:
+		iResRet = EL_SECURITY_RET_GET_PIN_BLOCK_ERR; 
+		break;
+	}
+	 
+	return iResRet;  
+}	
+
+
+int EncryptData(const char *pRequest ,char *pResponse,uint *pRspLen)   //给上位机调用
+{
+	int iRet=0;
+	uint uiTempLen=0;
+
+#ifdef PED_ENC_DEBUG_
+	AppLog("[EncryptData] pRequest[0]=%02x\n", pRequest[0]);
+#endif
+
+	if(pRequest[0]==0)
+	{
+		*pRspLen=4;
+		return EL_SECURITY_RET_PARAM_INVALID;  //Encryption data length err 
+    }
+	iRet=PedEncryptData(pRequest+1,pRequest[0],pResponse+2,&uiTempLen);
+	pResponse[0]=(uiTempLen >>8) & 0xFF;
+	pResponse[1]=uiTempLen & 0xFF;
+	*pRspLen=uiTempLen+2;
+	return iRet;
+}
+
+
+/******************************************************************
+1．	pucDataIn 代表要输入加密的数据
+2．	uiDataLen 代表要输入加密数据长度
+3．pucEncDataOut 代表输出加密后的数据
+4. puiEncDataLen 代表输出加密后数据长度
+******************************************************************/
+
+int PedEncryptData(const uchar *pucDataIn, uint uiDataLen,uchar *pucEncDataOut,uint *puiEncDataLen) 
+{
+	uint dataLen=0;
+	int iDataEncIndex=0,iDataEncType=0,iRet=0;
+	uchar *putGetDataIn;
+	uchar szOutput[256];
+	uchar szInPutRSA[256];
+	ST_RSA_KEY pstRsaKeyOut;
+
+	if(NULL==pucDataIn || uiDataLen==0 || pucEncDataOut==NULL)
+	{
+		return EL_SECURITY_RET_PARAM_INVALID;
+	}
+	memset(szOutput,0,sizeof(szOutput));
+	putGetDataIn=(uchar*)pucDataIn;
+
+	iDataEncType=g_tAppParam.ucDataEncryptionType[0];   /* 需要从应用参数中去取*/
+	iDataEncIndex=g_tAppParam.ucDataEncryptionKeyIdx[0];
+	
+#ifdef PED_ENC_DEBUG_
+	AppHexLog("[PedEncryptData] DataIn: ", putGetDataIn, uiDataLen);
+	AppLog("[PedEncryptData] iDataEncType=%02x, iDataEncIndex=%02x\n", iDataEncType, iDataEncIndex);
+#endif
+
+	switch (iDataEncType)
+	{	
+	case APPPARAM_DATA_ENCRYPT_TYPE_TDES:
+		if(0== uiDataLen %8) dataLen= uiDataLen; // 加密的数据是8的倍数,不足八位补0X00
+		if(uiDataLen %8) dataLen=( uiDataLen/8+1)*8;
+		iRet=PedCalcDES(iDataEncIndex,putGetDataIn, dataLen,szOutput,0x01);/*PDK需要从应用参数中去取*/
+		#ifdef PED_ENC_DEBUG_
+		AppLog("[PedEncryptData] PedCalcDES=%d\n", iRet);
+		if(iRet == PED_RET_OK)
+		{
+			AppHexLog("[PedEncryptData] EncryptData: ", szOutput, dataLen);
+		}
+		#endif
+		if(iRet!=0) 
+		{
+			if(iRet==PED_RET_ERR_NO_KEY) return EL_SECURITY_RET_NO_KEY;
+			return EL_SECURITY_RET_ENCRYPT_DATA_ERR;
+		}
+		memcpy(pucEncDataOut, szOutput,dataLen);  
+		*puiEncDataLen =dataLen; 
+		break; 
+		
+	case APPPARAM_DATA_ENCRYPT_TYPE_RSA:	
+		memset(&pstRsaKeyOut,0,sizeof(ST_RSA_KEY));;
+		memset(szInPutRSA,0,sizeof(szInPutRSA));
+		iRet=PedReadRsaKey(iDataEncIndex,&pstRsaKeyOut);//获取公钥模长，确定加密信息长度,秘钥索引取测试索引1
+		#ifdef PED_ENC_DEBUG_
+		AppLog("[PedEncryptData] PedReadRsaKey=%d\n", iRet);
+		if(iRet == PED_RET_OK)
+		{
+			AppLog("[PedEncryptData] pstRsaKeyOut.iModulusLen=%d\n", pstRsaKeyOut.iModulusLen);
+		}
+		#endif
+		if(iRet)
+		{
+			if(iRet==PED_RET_ERR_NO_KEY) return EL_SECURITY_RET_NO_KEY;
+			return EL_SECURITY_RET_ENCRYPT_DATA_ERR;
+		}
+		memcpy(szInPutRSA,pucDataIn,uiDataLen);  
+
+		iRet=PedRsaRecover(iDataEncIndex,szInPutRSA,szOutput,NULL); //秘钥索引需要去应用参数中去取
+		#ifdef PED_ENC_DEBUG_
+		AppLog("[PedEncryptData] PedRsaRecover=%d\n", iRet);
+		if(iRet == PED_RET_OK)
+		{
+			AppHexLog("[PedEncryptData] Encrypt Data: ", szOutput, pstRsaKeyOut.iModulusLen/8);
+		}
+		#endif
+		if(iRet!=0)
+		{
+			if(iRet==PED_RET_ERR_NO_KEY) return EL_SECURITY_RET_NO_KEY;
+			return EL_SECURITY_RET_ENCRYPT_DATA_ERR;
+		}
+		*puiEncDataLen= pstRsaKeyOut.iModulusLen/8;
+		memcpy(pucEncDataOut,szOutput,pstRsaKeyOut.iModulusLen/8);//从PedReadRsaKey（）函数中获取模长
+		break;	
+		
+	case APPPARAM_DATA_ENCRYPT_TYPE_NONE:		//如果加密方式为none,数据原样返回
+		memcpy(pucEncDataOut,pucDataIn,uiDataLen); 
+		*puiEncDataLen=uiDataLen;
+		break;
+	default:
+			return EL_SECURITY_RET_PARAM_INVALID;
+	}
+	return EL_RET_OK;
+}										

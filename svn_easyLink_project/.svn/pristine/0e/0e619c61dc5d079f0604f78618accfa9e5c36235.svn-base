@@ -1,0 +1,142 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date:2016/10/08     
+ * Module Auth:huangwp     
+ * Description:emv xml file operarte module
+
+ *      
+ * ============================================================================
+ */
+
+
+#ifndef _XML_EMV_FILE_OP_H
+#define _XML_EMV_FILE_OP_H
+
+#if 0
+
+#define EMV_XML_FILE_OP_DEBUG
+
+
+#define EMV_XML_FILE_OP_ERR_BASE                  	 -5000
+#define EMV_XML_FILE_OP_ERR_INVALID_PARAM             EMV_XML_FILE_OP_ERR_BASE-1
+
+#define EMV_XML_FILE_OP_RETURN_BASE                   5000
+#define EMV_XML_FILE_OP_NOT_FOUND_NODE                EMV_XML_FILE_OP_RETURN_BASE+1
+#define EMV_XML_FILE_OP_FOUND_NODE              	  EMV_XML_FILE_OP_RETURN_BASE+2
+#define EMV_XML_FILE_OP_NOT_FOUND_RETURN              EMV_XML_FILE_OP_RETURN_BASE+3
+
+#define EMV_XML_FILE_OP_OK
+
+
+#define EMV_BUF_NODE_VALUE_LEN                1024
+
+#define EMV_XML_FILE_NAME                "emv_xml.emv"
+
+typedef int (*EMV_PARSE_CB)(const uchar *pucXmlOneLine, void *pucOutData);
+
+
+typedef struct Emv_Parse_Func
+{
+	int iType;
+	EMV_PARSE_CB vFunc;
+}EMV_PARSE_FUNC;
+
+
+typedef enum{
+	AID = 1,
+	CAPK,
+	ICS,
+	REVOKCERTIFICATE,
+}EMV_NODE_TYPE;
+
+typedef enum{
+	PARTIALAIDSELECTION = 1,
+	APPLICATIONID,
+	IFUSELOCALNAME,
+	LOACALAIDNAME,
+	TERMINALAIDVERSION,
+	TACDENIAL,
+	TACONLINE,
+	TACDEFAULT,
+	FLOORLIMIT,
+	THRESHOLD,
+	TARGETPERCENTAGE,
+	MAXTARGETPERCENTAGE,
+	TERMINALDEFAULTTDOL,
+	TERMINALDEFAULTDDOL,
+	TERMINALRISKMANAGEMENTDATA,
+}AID_CHILD_NODE;
+
+
+typedef struct EmvAidNode
+{
+	uchar SelFlag;
+	uchar AID[17];
+	int IfUseLocalName;
+	uchar AppName[33]; 
+	uchar Version[3];
+	uchar TACDenial[6];
+	uchar TACOnline[6]; 	 
+	uchar TACDefault[6];
+	ulong FloorLimit;
+	ulong Threshold;  
+	uchar TargetPer;
+	uchar MaxTargetPer; 
+	uchar tDOL[256]; 
+	uchar dDOL[256];
+	uchar RiskManData[10]; 
+	
+}EMV_AID_NODE_T;
+
+
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+
+static int GetUiBoxType(uchar *pucXmlOneLine);
+
+
+//get aid child node value func
+static int GetPartialSelectionValue(const uchar *pucXmlOneLine, int *piData);
+static int GetApplicationIDValue(const uchar *pucXmlOneLine, uchar *pucData);
+static int GetIfUseLocalAIDNameValue(const uchar *pucXmlOneLine, int *piData);
+static int GetLocalAIDNameValue(const uchar *pucXmlOneLine, uchar *pucData);
+static int GetTerminalAIDVersionValue(const uchar *pucXmlOneLine, uchar *pucData);
+static int GetTACDenialValue(const uchar *pucXmlOneLine, uchar *pucData);
+static int GetTACOnlinelValue(const uchar *pucXmlOneLine, uchar *pucData);
+static int GetTACDefaultlValue(const uchar *pucXmlOneLine, uchar *pucData);
+static int GetFloorLimitValue(const uchar *pucXmlOneLine, int *piData);
+static int GetThresholdValue(const uchar *pucXmlOneLine, int *piData);
+static int GetTargetPercentageValue(const uchar *pucXmlOneLine, int *piData);
+static int GetMaxTargetPercentageValue(const uchar *pucXmlOneLine, int *piData);
+static int GetTerminalDefaultTDOLValue(const uchar *pucXmlOneLine, uchar *pucData);
+static int GetTerminalDefaultDDOLlValue(const uchar *pucXmlOneLine, uchar *pucData);
+static int GetTerminalRiskManagementDataValue(const uchar *pucXmlOneLine, uchar *pucData);
+static int ParseEmvAidChildNode(const uchar *pucXmlOneLine, EMV_AID_NODE_T *pstAidNode);
+int ParseEmvAidNOde(const uchar *pucData, EMV_APPLIST *pstApp)
+
+
+int ParseEmvIcs(const uchar *pucXmlOneLine, uchar *pucOutData);
+int ParseRevokeCertificate(const uchar *pucXmlOneLine, uchar *pucOutData);
+int ParseCapk(const uchar *pucXmlOneLine, uchar *pucOutData);
+int ParseEmvXmlFile();
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#pragma pack()
+
+#endif
+
+#endif
+

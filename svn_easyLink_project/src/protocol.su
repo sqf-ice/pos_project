@@ -1,0 +1,12 @@
+protocol.c:113:12:0	8	static
+protocol.c:32:7:ucMsgGenLRC	8	static
+protocol.c:211:12:iMsgRcvMsg	64	static
+protocol.c:177:12:iMsgSndSyn	40	static
+protocol.c:128:12:iMsgSndOutOfStep	48	static
+protocol.c:373:12:iMsgRcvNACK	1088	static
+protocol.c:153:12:iMsgSndNACK	48	static
+protocol.c:451:12:iMsgRcvFrame	80	static
+protocol.c:683:5:iMsgRcv	2128	static
+protocol.c:823:5:iMsgInit	16	static
+protocol.c:954:5:iReceiveRequest	80	static
+protocol.c:1057:5:iSendResponse	2144	static

@@ -1,0 +1,5 @@
+uixmlfileop.c:308:5:ParseMenu	1128	static
+uixmlfileop.c:248:5:ParsePictureBox	960	static
+uixmlfileop.c:123:5:ParseInputBox	1160	static
+uixmlfileop.c:28:5:ParseTextBox	1136	static
+uixmlfileop.c:569:5:ParseUi	5720	static

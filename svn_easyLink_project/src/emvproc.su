@@ -1,0 +1,17 @@
+emvproc.c:62:15:RetToString	0	static
+emvproc.c:87:5:cEMVCandAppSel	368	static
+emvproc.c:141:5:cEMVInputAmount	0	static
+emvproc.c:146:5:cEMVGetHolderPwd	24	static
+emvproc.c:297:6:cEMVVerifyPINOK	16	static
+emvproc.c:311:6:cCertVerify	0	static
+emvproc.c:317:6:cEMVSetParam	0	static
+emvproc.c:328:15:cEMVIccIsoCommand	8	static
+emvproc.c:346:5:EMVSetFinalApp2Kernel	656	static
+emvproc.c:385:5:EMVSetCAPK2Kernel	352	static
+emvproc.c:469:6:LoadEmvTLVFromFS	4408	static
+emvproc.c:548:6:BuildTLVString	16	static
+emvproc.c:589:5:ValidCardNo	24	static
+emvproc.c:629:5:ValidCard	288	static
+emvproc.c:688:5:EMVInitTransaction	8	static
+emvproc.c:700:5:EMVStartTransaction	576	static
+emvproc.c:889:5:EMVCompleteTransaction	1568	static

@@ -1,0 +1,83 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date:2016/09/21     
+ * Module Auth:huangwp     
+ * Description:UI xml file operarte module
+
+ *      
+ * ============================================================================
+ */
+
+
+#ifndef _XML_UI_FILE_OP_H
+#define _XML_UI_FILE_OP_H
+
+#define UI_XML_FILE_OP_DEBUG
+
+#define UI_XML_FILE_OP_ERR_BASE                  	 -4000
+#define UI_XML_FILE_OP_ERR_INVALID_PARAM             UI_XML_FILE_OP_ERR_BASE-1
+
+
+#define UI_XML_FILE_OP_NOT_FOUND_PAGE                UI_XML_FILE_OP_ERR_BASE-2
+
+
+#define UI_XML_FILE_OP_OK                             0
+
+
+//ATTR NAME
+#define UI_PAGE_ATTRA_NAME   		"name"
+#define UI_PAGE_ATTRA_X  			"x"
+#define UI_PAGE_ATTRA_Y   			"y"
+#define UI_PAGE_ATTRA_TEXTALIGN     "textAlign"
+#define UI_PAGE_ATTRA_VALUE   		"value"
+#define UI_PAGE_ATTRA_MODE   		"mode"
+#define UI_PAGE_ATTRA_FONTSIZE   	"fontSize"
+#define UI_PAGE_ATTRA_KEYACCECPT    "keyAccept"
+#define UI_PAGE_ATTRA_MINLEN   		"minlen"
+#define UI_PAGE_ATTRA_MAXLEN   		"maxlen"
+
+#define UI_PICTURE_BOX_ATTR_NUM     4
+#define UI_MENU_ATTR_NUM            6
+#define UI_TEXT_BOX_ATTR_NUM        8
+#define UI_INPUT_BOX_ATTR_NUM       10
+
+#define UI_ATTR_NAME_LEN            32
+#define UI_ATTR_VALUE_LEN           32
+
+
+#define UI_FILE_NAME                "file.ui"
+
+#define UI_READ_BUF_SIZE            1024
+#define UI_XML_FILE_LINE_BUF_SIZE    512
+
+#define UI_PAGE_ROOT_NODE_NAME      "Page name="
+typedef struct Struct_Addr_Table
+{
+	int iIndex;
+	int iAddr;	
+}STRUCT_ADDR_TABLE_T;
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+int ParseUi(const uchar *pucPageName, uchar *pucOutData);
+
+
+
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#pragma pack()
+
+
+#endif
+

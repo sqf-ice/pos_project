@@ -1,0 +1,726 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date: 2016/10/10    
+ * Module Auth: ZhangYuan 
+ * Description:   EMV contactless xml file operarte module
+
+ *      
+ * ============================================================================
+ */
+
+#include "..\inc\global.h"
+
+#if 0
+
+static int XmlGetOneLineData(const uchar *pucBufIn, int *OutLen, char *pucOutOneLineData)
+{
+    uchar *pucFirstTag = NULL;
+	int Length = 0;
+
+	if(NULL == pucBufIn)
+	{
+	    return XML_ERR_INVALID_PARAM;
+	}
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppLog("[XmlGetOneLineData] pucBufIn=%d\n", pucBufIn);
+#endif
+	pucFirstTag = strstr(pucBufIn, "\r\n");
+	if(pucFirstTag == NULL)
+	{
+#ifdef CLSS_XML_FILE_OP_DEBUG
+		AppLog("[XmlGetOneLineData] XML_LINE_END_TAG_NULL\n");
+#endif
+		return XML_LINE_END_TAG_NULL;
+	}
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppLog("[XmlGetOneLineData] pucFirstTag = %s\n", pucFirstTag);
+#endif
+
+	Length = pucFirstTag - pucBufIn;
+
+	//"\r\n" len = 2, so add 2;
+	*OutLen = Length + 2;
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppLog("[XmlGetOneLineData] Lenth = %d\n", Length);
+#endif
+
+	memcpy(pucOutOneLineData,pucBufIn, Length);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppLog("[XmlGetOneLineData] pucOutOneLineData = %s\n", pucOutOneLineData);
+#endif
+
+	return UI_XML_FILE_OP_OK;
+	
+}
+
+static int GetElementInteger(const uchar *pucXmlOneLine, const uchar *pucElementName, int *piOutData)
+{
+	int iRet=0;
+	uchar pucBuf[CLSS_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, pucElementName, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	*piOutData = (uchar)atoi(pucBuf);
+	
+	return iRet;
+}
+
+static int GetElementStr(const uchar *pucXmlOneLine, const uchar *pucElementName, uchar *pucOutData)
+{
+	int iRet=0;
+	uchar pucBuf[CLSS_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, pucElementName, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	strpcy(pucOutData, pucBuf);
+	
+	return iRet;
+}
+
+static int GetElementBcd(const uchar *pucXmlOneLine, const uchar *pucElementName, uchar *pucOutData, uint *puiOutDataLen)
+{
+	int iRet=0;
+	uchar pucBuf[CLSS_BUF_NODE_VALUE_LEN] = {0};
+
+	memset(pucBuf, 0, sizeof(pucBuf));
+	iRet = XmlParseGetNodeValue(pucXmlOneLine, pucElementName, pucBuf);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+	
+	PubAsc2Bcd(pucBuf, strlen((const char *)pucBuf), pucOutData);
+	*puiOutDataLen = strlen((const char *)pucBuf)/2 + strlen((const char *)pucBuf)%2;
+	
+	return iRet;
+}
+
+static void XmlGetIntactData(const uchar *pucXmlDataIn, int *piIntactLenOut)
+{
+	uchar *pucTmpEnd=NULL, *pucTmpBegin=NULL;
+	
+	if(pucXmlDataIn == NULL)
+	{
+		return;
+	}
+
+	*piIntactLenOut = 0;
+	
+	pucTmpEnd = strrchr(pucXmlDataIn, '>');
+	if(pucTmpEnd == NULL)
+	{
+		return;
+	}
+	
+	pucTmpBegin = strrchr(pucXmlDataIn, '<');
+	if(pucTmpEnd == NULL)
+	{
+		return;
+	}
+
+	if(pucTmpBegin < pucTmpEnd)
+	{
+		if(pucTmpBegin[1] == '/')
+		{
+			*piIntactLenOut = pucTmpEnd - pucXmlDataIn;
+		}
+		else if(pucTmpBegin > pucXmlDataIn)
+		{
+			*piIntactLenOut = pucTmpBegin - pucXmlDataIn;
+		}
+
+		// else  not interact data
+
+		return;
+	}
+	else
+	{
+		uchar aucBuf[CLSS_BUF_READ_SIZE+1];
+
+		memset(aucBuf, 0, sizeof(aucBuf));
+		memcpy(aucBuf, pucXmlDataIn, pucTmpEnd -1 - pucXmlDataIn);
+
+		pucTmpEnd = strrchr(aucBuf, '>');
+		if(pucTmpEnd != NULL)
+		{
+			*piIntactLenOut = pucTmpEnd - aucBuf + 1;
+		}
+	}
+}
+
+static int Paypass_GetAidChileNode(uchar *pucXmlOneLine, int *piXmlNodeOffset)
+{
+	uchar *pucTmp=NULL;
+	
+	if(pucXmlOneLine == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<PartialAIDSelection");
+	if( pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_PARTIALAIDSELECTION;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<ApplicationID");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_APPLICATIONID;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<IfUseLocalAIDName");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_IFUSELOCALNAME;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<LocalAIDName");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_LOACALAIDNAME;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<TerminalAIDVersion");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_TERMINALAIDVERSION;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<MagneticApplicationVersionNumber");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_MAG_APP_VERSION_NUM;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<TACDenial");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_TACDENIAL;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<TACOnline"); 
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_TACONLINE;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<TACDefault"); 
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_TACDEFAULT;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<TerminalRisk"); 
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_TERMINAL_RISK;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<ContactlessCVMLimit"); 
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_CLSS_CVM_LIMIT;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<ContactlessTransactionLimit_NoOnDevice"); 
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_CLSS_TRANS_LIMIT_NO_ON_DEVICE;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<ContactlessTransactionLimit_OnDevice"); 
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_CLSS_TRANS_LIMIT_ON_DEVICE;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<ContactlessFloorLimit"); 
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return PAYPASS_CLSS_FLOOR_LIMIT;
+	}
+
+	return CLSS_XML_FILE_OP_NOT_FOUND_NODE;
+}
+
+static int Paypass_ParseAid(const int iFd, const uchar *pucXmlData, int iFileOffset, int *piFileParseOffset)
+{
+	int 	iRet=0, iReadLen=0, iReadBufOffset=0, iXmlIntactOffset=0, iXmlParseOffset=0;
+	uchar	aucReadBuf[CLSS_BUF_READ_SIZE+1]={0}, ucFlag=0x00;
+	uchar	*pucTmp=NULL;
+
+	if(pucXmlData != NULL && strlen(pucXmlData) != 0)
+	{
+		strcpy(aucReadBuf, pucXmlData);
+		ucFlag = 0x01;
+	}
+	
+	while(1)
+	{		
+		if(ucFlag == 0x00)
+		{
+			memset(aucReadBuf, 0, sizeof(aucReadBuf));
+			iReadLen = PdkFile_Read(iFd, aucReadBuf+iReadBufOffset, CLSS_BUF_READ_SIZE);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+			AppLog("[Paypass_ParseAid] PdkFile_Read=%d\n", iReadLen);
+#endif
+			if(iReadLen < 0)
+			{
+				PdkFile_Close (iFd);
+				return iReadLen;
+			}
+		}
+
+		ucFlag = 0x00;
+
+		XmlGetIntactData(aucReadBuf, &iXmlIntactOffset);
+		while(iXmlParseOffset < iXmlIntactOffset)
+		{
+			// find paypass main node
+			iRet = Paypass_GetAidChileNode(pucXmlData);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+			AppLog("[Paypass_ParseAid] Paypass_ParseMainNode=%d\n", iRet);
+#endif
+			if(iRet < 0)
+			{
+				return iRet;
+			}
+			else if(iRet == CLSS_XML_FILE_OP_NOT_FOUND_NODE)
+			{
+#ifdef CLSS_XML_FILE_OP_DEBUG
+				AppLog("[Paypass_ParseAid] CLSS_XML_FILE_OP_NOT_FOUND_NODE\n");
+#endif
+				pucTmp = strrchr(aucReadBuf, '<');
+				if(pucTmp != NULL)
+				{
+					uchar aucBuf[128]={0};
+		
+					memset(aucBuf, 0, sizeof(aucBuf));
+					strcpy(aucBuf, pucTmp);
+					memset(aucReadBuf, 0, sizeof(aucReadBuf));
+					strcpy(aucReadBuf, aucBuf);
+					iReadBufOffset = strlen(aucBuf);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+					AppLog("[Paypass_ParseAid] iReadBufOffset=%d, pucTmp=%s\n", iReadBufOffset, pucTmp);
+#endif
+				}
+		
+				continue;
+			}
+
+			if(iRet == PAYPASS_PARTIALAIDSELECTION)
+			{
+				int iPartialAIDSelection=0;
+				iRet = GetElementInteger(pucXmlData, "PartialAIDSelection", &iPartialAIDSelection);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+				AppLog("[Paypass_ParseAid] GetElementInteger=%d, iPartialAIDSelection=%d\n", iRet, iPartialAIDSelection);
+#endif
+			}
+
+			if(strstr(aucReadBuf, "</AIDLIST>") != NULL)
+			{
+				// Finish parse Paypass parameters 
+#ifdef CLSS_XML_FILE_OP_DEBUG
+				AppLog("[Paypass_ParseAid] </AIDLIST> found\n");
+#endif
+				return 0;
+			}
+		}		
+	}
+	
+	return iRet;
+}
+
+static int Paypass_ParseConfig()
+{
+	int iRet=0;
+
+	return iRet;
+}
+
+static int Paypass_ParseMainNode(const uchar *pucXmlData, int *piXmlNodeOffset)
+{
+	uchar *pucTmp=NULL;
+	
+	if(pucXmlData == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	pucTmp = strstr(pucXmlData, "<AIDLIST>");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlData;
+		return CLSS_PAYPASS_AIDLIST;
+	}
+
+	pucTmp = strstr(pucXmlData, "<PAYPASSCONFIGURATION>");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlData;
+		return CLSS_PAYPASS_CONFIG;
+	}
+
+	pucTmp = strstr(pucXmlData, "</AIDLIST>");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlData;
+		return CLSS_PAYPASS_AIDLIST_END;
+	}
+
+	return CLSS_XML_FILE_OP_NOT_FOUND_NODE;
+}
+
+static int Paypass_Parse(const int iFd, const uchar *pucXmlData, int iFileOffset)
+{
+	int 	iRet=0, iReadLen=0, iReadBufOffset=0, iDataParseOffset=0;
+	uchar	aucReadBuf[CLSS_BUF_READ_SIZE+200]={0}, ucFlag=0x00;
+	uchar	*pucTmp=NULL;
+
+	if(pucXmlData != NULL && strlen(pucXmlData) != 0)
+	{
+		strcpy(aucReadBuf, pucXmlData);
+		iReadLen = strlen(pucXmlData);
+		ucFlag = 0x01;
+	}
+	
+	while(1)
+	{		
+		if(ucFlag == 0x00)
+		{
+			memset(aucReadBuf, 0, sizeof(aucReadBuf));
+			iReadLen = PdkFile_Read(iFd, aucReadBuf+iReadBufOffset, CLSS_BUF_READ_SIZE);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+			AppLog("[Paypass_Parse] PdkFile_Read=%d\n", iReadLen);
+#endif
+			if(iReadLen < 0)
+			{
+				PdkFile_Close (iFd);
+				return iReadLen;
+			}
+		}
+
+		ucFlag = 0x00;
+
+		while(iDataParseOffset < iReadLen)
+		{
+			// find paypass main node
+			iRet = Paypass_ParseMainNode(pucXmlData, &iDataParseOffset);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+			AppLog("[Paypass_Parse] Paypass_ParseMainNode=%d, iDataParseOffset=%d\n", iRet, iDataParseOffset);
+#endif
+			if(iRet < 0)
+			{
+				return iRet;
+			}
+			else if(iRet == CLSS_XML_FILE_OP_NOT_FOUND_NODE)
+			{
+#ifdef CLSS_XML_FILE_OP_DEBUG
+				AppLog("[Paypass_Parse] CLSS_XML_FILE_OP_NOT_FOUND_NODE\n");
+#endif
+				pucTmp = strrchr(aucReadBuf, '<');
+				if(pucTmp != NULL)
+				{
+					uchar aucBuf[128]={0};
+		
+					memset(aucBuf, 0, sizeof(aucBuf));
+					strcpy(aucBuf, pucTmp);
+					memset(aucReadBuf, 0, sizeof(aucReadBuf));
+					strcpy(aucReadBuf, aucBuf);
+					iReadBufOffset = strlen(aucBuf);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+					AppLog("[Paypass_Parse] iReadBufOffset=%d, pucTmp=%s\n", iReadBufOffset, pucTmp);
+#endif
+				}
+		
+				continue;
+			}
+
+			if( iRet == CLSS_PAYPASS_AIDLIST)
+			{
+				iRet = Paypass_ParseAid();
+			}
+			else if( iRet == CLSS_PAYPASS_CONFIG)
+			{
+				iRet = Paypass_ParseConfig();
+			}
+			else if( iRet == CLSS_PAYPASS_AIDLIST_END)
+			{
+				// Finish parse Paypass parameters 
+#ifdef CLSS_XML_FILE_OP_DEBUG
+				AppLog("[Paypass_Parse] </PAYPASSPARAM> found\n");
+#endif
+				return 0;
+			}
+		}		
+	}
+	
+	return iRet;
+}
+
+static int Paywave_ParseAid()
+{
+	int iRet=0;
+
+	return iRet;
+}
+
+static int Paywave_ParseProgramId()
+{
+	int iRet=0;
+
+	return iRet;
+}
+
+static int Paywave_ParseTermCapability()
+{
+	int iRet=0;
+
+	return iRet;
+}
+
+static int Paywave_ParseMainNode(const uchar *pucXmlData)
+{
+	if(pucXmlData == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+	if(strstr(pucXmlData, "<AIDLIST>") != NULL)
+	{
+		return CLSS_PAYWAVE_AID;
+	}
+	if(strstr(pucXmlData, "<INTERWARELIST>") != NULL)
+	{
+		return CLSS_PAYWAVE_AID_INTERWARE;
+	}
+	if(strstr(pucXmlData, "<PROGRAMIDLIST>") != NULL)
+	{
+		return CLSS_PAYPASS_CONFIG;
+	}
+
+	return CLSS_XML_FILE_OP_NOT_FOUND_NODE;
+}
+
+static int Paywave_Parse()
+{
+	int iRet=0;
+
+	return iRet;
+}
+
+static int OtherConfig_Parse()
+{
+	int iRet=0;
+
+	return iRet;
+}
+
+static int ClssParam_GetChild(const uchar *pucXmlData, const uchar *pucElementName)
+{
+	int 	iRet=0;
+	uchar 	*pucBufPos=NULL, aucNodeName[64]={0};
+
+	if(pucXmlData == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	memset(aucNodeName, 0, sizeof(aucNodeName));
+	sprintf(aucNodeName, "<%s>", pucElementName);
+
+	pucBufPos = strstr(pucXmlData, aucNodeName);
+	if(pucBufPos == NULL)
+	{
+		return CLSS_XML_FILE_OP_NOT_FOUND_NODE;
+	}
+
+	return (pucBufPos - pucXmlData);
+}
+
+static int ClssParam_ParseMainNode(const uchar *pucXmlOneLine, int *piXmlNodeOffset)
+{
+	uchar *pucTmp=NULL;
+	
+	if(pucXmlOneLine == NULL)
+	{
+		return CLSS_XML_FILE_OP_ERR_INVALID_PARAM;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<PAYPASSPARAM>");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return CLSS_PAYPASS_PARAM;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<PAYWAVEPARAM>");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return CLSS_PAYWAVE_PARAM;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "<OTHERCONFIGURATION>");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return CLSS_OTHER_CONFIG;
+	}
+
+	pucTmp = strstr(pucXmlOneLine, "</CLSSPARAM>");
+	if(pucTmp != NULL)
+	{
+		*piXmlNodeOffset = pucTmp - pucXmlOneLine;
+		return CLSS_PARAM_END;
+	}
+
+	return CLSS_XML_FILE_OP_NOT_FOUND_NODE;
+}
+
+static int ClssParam_Parse(const char *pcClssParamFileName)
+{
+	int 	iRet=0, iFd=0, iFileSize=0, iOffset=0, iReadLen=0, iXmlDataOffset=0, iReadBufOffset=0;
+	uchar 	aucReadBuf[CLSS_BUF_READ_SIZE+300] = {0}, aucNodeBegin[32+1], aucNodeEnd[32+1];
+	uchar	*pucNodeBegin, *pucNodeEnd, *pucTmp;
+
+	if(pcClssParamFileName == NULL || PdkFile_Exist(pcClssParamFileName) != PDK_RET_OK)
+	{
+#ifdef CLSS_XML_FILE_OP_DEBUG
+		AppLog("[ClssParam_Parse] File %s not exist\n", pcClssParamFileName);
+#endif
+		return CLSS_XML_FILE_OP_NOT_EXIST;
+	}
+
+	iFd = PdkFile_Open(pcClssParamFileName);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppLog("[ClssParam_Parse] PdkFile_Open=%d, File: %s\n", iFd, pcClssParamFileName);
+#endif	
+	if(iFd < 0)
+	{
+		return iFd;
+	}
+
+	iFileSize = PdkFile_GetSize(pcClssParamFileName);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+	AppLog("[ClssParam_Parse] PdkFile_GetSize=%d\n", iFileSize);
+#endif	
+	if(iFileSize < 0)
+	{
+		PdkFile_Close (iFd);
+		return iFileSize;
+	}
+
+	while(iOffset < iFileSize)
+	{
+		memset(aucReadBuf, 0, sizeof(aucReadBuf));
+		iReadLen = PdkFile_Read(iFd, aucReadBuf+iReadBufOffset, CLSS_BUF_READ_SIZE);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+		AppLog("[ClssParam_Parse] PdkFile_Read=%d\n", iReadLen);
+#endif
+		if(iReadLen < 0)
+		{
+			PdkFile_Close (iFd);
+		    return iReadLen;
+		}
+
+		iReadBufOffset = 0;		
+		while(iReadBufOffset < iReadLen)
+		{
+			iRet = ClssParam_ParseMainNode(aucReadBuf, &iReadBufOffset);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+			AppLog("[ClssParam_Parse] ClssParam_ParseMainNode=%d\n", iRet);
+#endif
+			if(iRet < 0)
+			{
+				PdkFile_Close (iFd);
+				return iRet;
+			}
+			else if(iRet == CLSS_XML_FILE_OP_NOT_FOUND_NODE)
+			{
+#ifdef CLSS_XML_FILE_OP_DEBUG
+				AppLog("[ClssParam_Parse] CLSS_XML_FILE_OP_NOT_FOUND_NODE\n");
+#endif
+				pucTmp = strrchr(aucReadBuf, '<');
+				if(pucTmp != NULL)
+				{
+					uchar aucBuf[128]={0};
+
+					memset(aucBuf, 0, sizeof(aucBuf));
+					strcpy(aucBuf, pucTmp);
+					memset(aucReadBuf, 0, sizeof(aucReadBuf));
+					strcpy(aucReadBuf, aucBuf);
+					iReadBufOffset = strlen(aucBuf);
+#ifdef CLSS_XML_FILE_OP_DEBUG
+					AppLog("[ClssParam_Parse] iReadBufOffset=%d, pucTmp=%s\n", iReadBufOffset, pucTmp);
+#endif
+				}
+
+				break;
+			}
+
+			iOffset += iReadLen;
+			
+			if(iRet == CLSS_PAYPASS_PARAM)	// <PAYPASSPARAM>
+			{
+				iRet = Paypass_Parse(pucNodeBegin + iReadBufOffset, iXmlDataOffset);	
+			}
+			else if(iRet == CLSS_PAYWAVE_PARAM) // <PAYWAVEPARAM>
+			{
+				iRet = Paywave_Parse();
+			}
+			else if(iRet == CLSS_OTHER_CONFIG)	// <OTHERCONFIGURATION>
+			{
+				iRet = OtherConfig_Parse();
+			}
+			else if(iRet == CLSS_PARAM_END)
+			{
+				if(strstr(aucReadBuf, "</CLSSPARAM>") != NULL)
+				{
+					// parse complete
+#ifdef CLSS_XML_FILE_OP_DEBUG
+					AppLog("[ClssParam_Parse] </CLSSPARAM> found\n");
+#endif
+					PdkFile_Close(iFd);
+					return 0;
+				}
+			}			
+		}		
+
+		iOffset += iXmlDataOffset;
+		iXmlDataOffset = 0;
+	}
+
+	return iRet;
+}
+
+#endif
+

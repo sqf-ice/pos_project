@@ -1,0 +1,130 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date: 2016/10/10     
+ * Module Auth: ZhangYuan 
+ * Description:   EMV contactless xml file operarte module
+
+ *      
+ * ============================================================================
+ */
+
+
+#ifndef _CLSS_EMV_FILE_OP_H
+#define _CLSS_EMV_FILE_OP_H
+
+
+
+#define CLSS_XML_FILE_OP_ERR_BASE					-6000
+#define CLSS_XML_FILE_OP_ERR_INVALID_PARAM			CLSS_XML_FILE_OP_ERR_BASE-1
+
+#define CLSS_XML_FILE_OP_RETURN_BASE				6000
+#define CLSS_XML_FILE_OP_NOT_EXIST					CLSS_XML_FILE_OP_RETURN_BASE+1
+#define CLSS_XML_FILE_OP_NOT_FOUND_NODE				CLSS_XML_FILE_OP_RETURN_BASE+2
+#define CLSS_XML_FILE_OP_FOUND_NODE					CLSS_XML_FILE_OP_RETURN_BASE+3
+#define CLSS_XML_FILE_OP_NOT_FOUND_RETURN			CLSS_XML_FILE_OP_RETURN_BASE+4
+
+#define CLSS_XML_FILE_OP_OK
+
+
+#define CLSS_BUF_READ_SIZE							1024
+#define CLSS_BUF_TMP_READ_SIZE						1356
+#define CLSS_BUF_NODE_VALUE_LEN                		256
+
+#define CLSS_XML_FILE_NAME                			"clss_xml.clss"
+
+#define CLSS_XML_NODE_PAYPASS						"PAYPASSPARAM"
+#define CLSS_XML_NODE_PAYWAVE						"PAYWAVEPARAM"
+#define CLSS_XML_NODE_OTHER							"OTHERCONFIGURATION"
+
+#define XML_ELEMENT_BEGIN_FLAG						0x00
+#define XML_ELEMENT_END_FLAG						0x01
+
+typedef int (*CLSS_PARSE_CB)(const uchar *pucXmlOneLine, void *pucOutData);
+
+typedef struct Clss_Parse
+{
+	int NodeType;
+	CLSS_PARSE_CB ClssParseCb;
+	
+}CLSS_PARSE;
+
+typedef enum{
+	CLSS_PAYPASS_PARAM = 1,
+	CLSS_PAYPASS_AIDLIST,
+	CLSS_PAYPASS_CONFIG,
+	CLSS_PAYPASS_AIDLIST_END,
+
+	CLSS_PAYWAVE_PARAM,
+	CLSS_PAYWAVE_AID,
+	CLSS_PAYWAVE_AID_INTERWARE,
+	CLSS_PAYWAVE_PROGRAM_ID,
+	CLSS_PAYWAVE_TERM_CAPABILITY,
+
+	CLSS_OTHER_CONFIG,
+
+	CLSS_PARAM_END,
+}CLSS_NODE_TYPE;
+
+typedef enum{
+	PAYPASS_PARTIALAIDSELECTION = 1,	// PartialAIDSelection
+	PAYPASS_APPLICATIONID,				// ApplicationID
+	PAYPASS_IFUSELOCALNAME,				// IfUseLocalAIDName
+	PAYPASS_LOACALAIDNAME,				// LocalAIDName
+	PAYPASS_TERMINALAIDVERSION,			// TerminalAIDVersion
+	PAYPASS_MAG_APP_VERSION_NUM,		// MagneticApplicationVersionNumber
+	PAYPASS_TACDENIAL,					// TACDenial
+	PAYPASS_TACONLINE,					// TACOnline
+	PAYPASS_TACDEFAULT,					// TACDefault
+	PAYPASS_TERMINAL_RISK,				// TerminalRisk
+	PAYPASS_CLSS_CVM_LIMIT,				// ContactlessCVMLimit
+	PAYPASS_CLSS_TRANS_LIMIT_NO_ON_DEVICE,	// ContactlessTransactionLimit_NoOnDevice
+	PAYPASS_CLSS_TRANS_LIMIT_ON_DEVICE,		// ContactlessTransactionLimit_OnDevice
+	PAYPASS_CLSS_FLOOR_LIMIT,				// ContactlessFloorLimit
+}PAYPASS_AID_CHILD_NODE;
+
+typedef enum {
+	KERNEL_CONFIG = 1,			// KernelConfiguration
+	TORN_LEFT_TIME,				// TornLeftTime
+	MAX_TORN_NUM,				// MaximumTornNumber
+	MAG_CVM,					// MagneticCVM
+	MAG_NO_CVM,					// MagneticNoCVM
+	MOBILE_SUPPORT,				// MobileSupport
+	CARD_DATA_INPUT,			// CardDataInput
+	CVM_CAPABILITY_CVM_REQUIRED,	// CVMCapability_CVMRequired
+	CVM_CAPABILITY_NO_CVM_REQUIRED,	// CVMCapability_NoCVMRequired
+	TERMINAL_TYPE,					// TerminalType
+	ACCOUNT_TYPE,					// AccoutType
+	ADDITIONAL_TERMINAL_CAPABILITY,	// AdditionalTerminalCapability
+	KERNEL_ID,						// KernelID
+	SECURITY_CAPABILITY,			// SecurityCapability
+}PAYPASS_CONFIG_CHILD_NODE;
+
+#if 0
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+int PaseEmvAid(const uchar *pucXmlOneLine, EMV_APPLIST *pstApp);
+int ParseEmvIcs(const uchar *pucXmlOneLine, uchar *pucOutData);
+int ParseRevokeCertificate(const uchar *pucXmlOneLine, uchar *pucOutData);
+int ParseCapk(const uchar *pucXmlOneLine, uchar *pucOutData);
+int ParseEmvXmlFile();
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#pragma pack()
+
+#endif
+
+#endif
+

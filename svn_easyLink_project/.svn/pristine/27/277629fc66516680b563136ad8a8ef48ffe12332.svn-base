@@ -1,0 +1,937 @@
+/*------------------------------------------------------------
+* FileName: parammgmt.c
+* Author: liukai
+* Date: 2016-08-03
+------------------------------------------------------------*/
+#include "..\inc\global.h"
+
+static unsigned char sg_ucData[4096]={0};	//in D180s no malloc, have to use this.
+static int sg_iDataLen=0;
+
+DATA_TERMINFO g_tTermInfo;
+DATA_APPPARAM g_tAppParam;
+DATA_TRANSPARAM g_tTransParam;
+DATA_MATCHLIST g_tMatchList[] = {
+	//terminal information
+	{CMD_TERM_SN,		g_tTermInfo.ucTermSN,				sizeof(g_tTermInfo.ucTermSN),	0,			DATA_PERMISSION_READ},
+	{CMD_TERM_MODEL_CODE,		g_tTermInfo.ucTermModelCode,			sizeof(g_tTermInfo.ucTermModelCode), 0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_PRINTER_INFO, 	g_tTermInfo.ucTermPrinterInfo,			sizeof(g_tTermInfo.ucTermPrinterInfo),		DATA_PERMISSION_READ},
+	{CMD_TERM_MODEM_EXIST,		g_tTermInfo.ucTermModemExist,		sizeof(g_tTermInfo.ucTermModemExist), 0,	DATA_PERMISSION_READ},
+	{CMD_TERM_USB_EXIST,		g_tTermInfo.ucTermUSBExist, 		sizeof(g_tTermInfo.ucTermUSBExist), 0,		DATA_PERMISSION_READ},
+	{CMD_TERM_LAN_EXIST,		g_tTermInfo.ucTermLANExist, 		sizeof(g_tTermInfo.ucTermLANExist),  0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_GPRS_EXIST,		g_tTermInfo.ucTermGPRSExist,			sizeof(g_tTermInfo.ucTermGPRSExist), 0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_CDMA_EXIST,		g_tTermInfo.ucTermCDMAExist,			sizeof(g_tTermInfo.ucTermCDMAExist), 0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_WIFI_EXIST,		g_tTermInfo.ucTermWIFIExist,			sizeof(g_tTermInfo.ucTermWIFIExist), 0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_RF_EXIST, 	g_tTermInfo.ucTermRFExist,			sizeof(g_tTermInfo.ucTermRFExist), 0,			DATA_PERMISSION_READ},
+	{CMD_TERM_IC_EXIST, 	g_tTermInfo.ucTermICExist,			sizeof(g_tTermInfo.ucTermICExist), 0,			DATA_PERMISSION_READ},
+	{CMD_TERM_MAG_EXIST,		g_tTermInfo.ucTermMAGExist, 		sizeof(g_tTermInfo.ucTermMAGExist), 0,		DATA_PERMISSION_READ},
+	{CMD_TERM_TILT_EXIST,		g_tTermInfo.ucTermTILTExist,			sizeof(g_tTermInfo.ucTermTILTExist), 0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_WCDMA_EXIST,		g_tTermInfo.ucTermWCDMAExist,		sizeof(g_tTermInfo.ucTermWCDMAExist), 0,		DATA_PERMISSION_READ},
+	{CMD_TERM_TOUCHSCREEN_EXIST,		g_tTermInfo.ucTermTOUCHSCRExist,		sizeof(g_tTermInfo.ucTermTOUCHSCRExist), 0, DATA_PERMISSION_READ},
+	{CMD_TERM_COLORSCREEN_EXIST,		g_tTermInfo.ucTermCOLORSCRExist,		sizeof(g_tTermInfo.ucTermCOLORSCRExist), 0, DATA_PERMISSION_READ},
+	{CMD_TERM_SCREEN_SIZE,		g_tTermInfo.ucTermScrSize,			sizeof(g_tTermInfo.ucTermScrSize), 0,			DATA_PERMISSION_READ},
+	{CMD_TERM_APP_NAME, 	g_tTermInfo.ucTermAppName,			sizeof(g_tTermInfo.ucTermAppName), 0,		DATA_PERMISSION_READ},
+	{CMD_TERM_APP_VERSION,		g_tTermInfo.ucTermAppVer,			sizeof(g_tTermInfo.ucTermAppVer), 0,			DATA_PERMISSION_READ},
+	{CMD_TERM_APPSO_NAME,		g_tTermInfo.ucTermAppSoName,		sizeof(g_tTermInfo.ucTermAppSoName), 0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_APPSO_VERSION,		g_tTermInfo.ucTermAppSoVer, 		sizeof(g_tTermInfo.ucTermAppSoVer), 0,		DATA_PERMISSION_READ},
+	{CMD_TERM_PUBSO_NAME,		g_tTermInfo.ucTermPubSoName,		sizeof(g_tTermInfo.ucTermPubSoName), 0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_PUBSO_VERSION,		g_tTermInfo.ucTermPubSoVer, 		sizeof(g_tTermInfo.ucTermPubSoVer), 0,		DATA_PERMISSION_READ},
+	{CMD_TERM_BATTERY_INFO, 	g_tTermInfo.ucTermBatteryInfo,		sizeof(g_tTermInfo.ucTermBatteryInfo), 0,		DATA_PERMISSION_READ},
+	{CMD_TERM_REST_FS_SIZE, 	g_tTermInfo.ucTermRestFSSize,			sizeof(g_tTermInfo.ucTermRestFSSize), 0,		DATA_PERMISSION_READ},
+	{CMD_TERM_OS_NAME,		g_tTermInfo.ucTermOSName,			sizeof(g_tTermInfo.ucTermOSName),	 0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_OS_VERSION,		g_tTermInfo.ucTermOSVer,				sizeof(g_tTermInfo.ucTermOSVer), 0, 		DATA_PERMISSION_READ},
+	{CMD_TERM_PCI_EXIST,		g_tTermInfo.ucTermPCIExist, 		sizeof(g_tTermInfo.ucTermPCIExist),  0, 	DATA_PERMISSION_READ},
+	{CMD_TERM_TIME,		g_tTermInfo.ucTermTime, 		sizeof(g_tTermInfo.ucTermTime),  0, 	DATA_PERMISSION_READ_WRITE},
+	//application parameters
+	{CMD_APP_SLEEP_TIMEOUT, 	g_tAppParam.ucSleepModeTimeout, 	sizeof(g_tAppParam.ucSleepModeTimeout), 0,	DATA_PERMISSION_READ_WRITE},
+	{CMD_APP_PIN_ENCRYP_TYPE,		g_tAppParam.ucPINEncryptionType,		sizeof(g_tAppParam.ucPINEncryptionType), 0, DATA_PERMISSION_READ_WRITE},
+	{CMD_APP_PIN_ENCRYP_KEY_ID, 	g_tAppParam.ucPINEncryptionKeyIdx,	sizeof(g_tAppParam.ucPINEncryptionKeyIdx), 0,	DATA_PERMISSION_READ_WRITE},
+	{CMD_APP_PIN_BLOCK_MODE,		g_tAppParam.ucPINBlockMode, 		sizeof(g_tAppParam.ucPINBlockMode), 0,	DATA_PERMISSION_READ_WRITE},
+	{CMD_APP_DATA_ENCRYP_TYPE,		g_tAppParam.ucDataEncryptionType,	sizeof(g_tAppParam.ucDataEncryptionType), 0,	DATA_PERMISSION_READ_WRITE},
+	{CMD_APP_DATA_ENCRYP_KEY_ID,		g_tAppParam.ucDataEncryptionKeyIdx, sizeof(g_tAppParam.ucDataEncryptionKeyIdx), 0, DATA_PERMISSION_READ_WRITE},
+	{CMD_APP_FALLBACK_ALLOW,		g_tAppParam.ucFallbackAllowFlag,		sizeof(g_tAppParam.ucFallbackAllowFlag), 0, DATA_PERMISSION_READ_WRITE},
+	{CMD_APP_PAN_MASK_START_POS,		g_tAppParam.ucPANMaskStartPos,		sizeof(g_tAppParam.ucPANMaskStartPos), 0,	DATA_PERMISSION_READ_WRITE},
+	//transaction parameters
+	//if add the transaction parameters, please remember to initialize it in ConfigueTransParamInit function.
+	{CMD_TXN_CUR_TXN_TYPE,		g_tTransParam.ucCurrentTxnType, 	sizeof(g_tTransParam.ucCurrentTxnType), 0,		DATA_PERMISSION_READ},
+	{CMD_TXN_CUR_CLSS_TYPE, 	g_tTransParam.ucCurrentCLSSType,	sizeof(g_tTransParam.ucCurrentCLSSType), 0, DATA_PERMISSION_READ},
+	{CMD_TXN_PATH_TYPE, 	g_tTransParam.ucCurrentPathType,	sizeof(g_tTransParam.ucCurrentPathType), 0, DATA_PERMISSION_READ},
+	{CMD_TXN_TRACK_ONE_DATA,		g_tTransParam.ucTrackOneData,		sizeof(g_tTransParam.ucTrackOneData), 0,		DATA_PERMISSION_READ},
+	{CMD_TXN_TRACK_TWO_DATA,		g_tTransParam.ucTrackTwoData,		sizeof(g_tTransParam.ucTrackTwoData), 0,		DATA_PERMISSION_READ},
+	{CMD_TXN_TRACK_THREE_DATA,		g_tTransParam.ucTrackThreeData, 	sizeof(g_tTransParam.ucTrackThreeData), 0,		DATA_PERMISSION_READ},
+	{CMD_TXN_EXPIRE_DATE,		g_tTransParam.ucExpDate, 	sizeof(g_tTransParam.ucExpDate), 0,		DATA_PERMISSION_READ},
+	
+	{CMD_TXN_ONLINE_RESULT, 	g_tTransParam.ucOnlineResult,		sizeof(g_tTransParam.ucOnlineResult), 0,			DATA_PERMISSION_READ_WRITE},
+	{CMD_TXN_RSP_CODE,		g_tTransParam.ucRspCode,			sizeof(g_tTransParam.ucRspCode), 0, 			DATA_PERMISSION_READ_WRITE},
+	{CMD_TXN_AUTH_CODE, 	g_tTransParam.ucAuthCode,			sizeof(g_tTransParam.ucAuthCode), 0,				DATA_PERMISSION_READ_WRITE},
+	{CMD_TXN_AUTH_DATA, 	g_tTransParam.ucAuthData,			sizeof(g_tTransParam.ucAuthData), 0,				DATA_PERMISSION_READ_WRITE},
+	{CMD_TXN_AUTH_DATA_LEN, 	g_tTransParam.ucAuthDataLen,		sizeof(g_tTransParam.ucAuthDataLen), 0, 		DATA_PERMISSION_READ_WRITE},
+	{CMD_TXN_ISSUER_SCRIPT, 	g_tTransParam.ucIssuerScript,		sizeof(g_tTransParam.ucIssuerScript), 0,			DATA_PERMISSION_READ_WRITE},
+	{CMD_TXN_ISSUER_SCRIPT_LEN, 	g_tTransParam.ucIssuerScriptLen,	sizeof(g_tTransParam.ucIssuerScriptLen), 0, 	DATA_PERMISSION_READ_WRITE},
+	
+	{CMD_TXN_ONLINE_PIN_INPUT,		g_tTransParam.ucOnlinePinInput, 	sizeof(g_tTransParam.ucOnlinePinInput), 0,		DATA_PERMISSION_READ},
+	{CMD_TXN_PIN_BLOCK, 	g_tTransParam.ucPinBlock,			sizeof(g_tTransParam.ucPinBlock), 0,			DATA_PERMISSION_READ},
+	{CMD_TXN_KSN,		g_tTransParam.ucKsn,				sizeof(g_tTransParam.ucKsn), 0, 			DATA_PERMISSION_READ},
+
+	{CMD_TXN_ICS_TYPE,		g_tTransParam.ucICSType,			sizeof(g_tTransParam.ucICSType), 0, 		DATA_PERMISSION_READ_WRITE},
+
+	{"", NULL, 0},
+};
+
+int SetConfigurationData(const unsigned char *pucTag, const unsigned char *pucData, int iDataLen);
+int GetConfigurationData(const unsigned char *pucTag, unsigned char *pucDataOut, int *piDataLenOut);
+static int ValidateTLVData(const unsigned char * paucTLVDataList, unsigned int uiTLVDataListLen, unsigned char * paucWrongTag, unsigned int * punTagLen);
+static int ValidateAndExecuteConfigurationData(const unsigned char *pucTag, const unsigned char *pucData, int iDataLen);
+static int GetSpecifyConfigurationData(const unsigned char *pucTag, int iTagLen, unsigned char *punDataOut, int *piDataLen);
+//static int SaveClssPreProcParam(const unsigned char *pucTag, int iTagLen, const unsigned char *pucData, int iDataLen);
+int SetData(const unsigned char *pucData, unsigned char *pucSuccessTagListOut, unsigned int *puiSuccessTagListLenOut);
+int GetData(const unsigned char *pucData, unsigned char *pucTLVListOut, unsigned int *puiTLVListLenOut);
+int LoadTLVDataFromFSToMem(void);
+int GetAllTLVDataFromMem(unsigned char *pucDataOut, int *piDataLen);
+
+static uchar *RetToString(int ReturnCode)
+{
+	switch(ReturnCode)
+	{
+		case EL_PARAM_RET_ERR_DATA:
+			return "PARAM:ErrData";
+		case EL_PARAM_RET_INVALID_PARAM:
+			return "PARAM:InvlidParam";
+		case EL_PARAM_RET_PARTIAL_FAILED:
+			return "PARAM:PartialFailed";
+		case EL_PARAM_RET_ALL_FAILED:
+			return "PARAM:AllFailed";
+		case EL_PARAM_RET_SIZE_SMALL:
+			return "PARAM:SizeSmall";
+		case EL_PARAM_RET_API_ORDER_ERR:
+			return "PARAM:ApiOrderErr";
+		default:
+			return "PARAM:Unkonw";
+	}
+}
+
+
+
+int SetConfigurationData(const unsigned char *pucTag, const unsigned char *pucData, int iDataLen)
+{
+	int i=0, iRet=0;
+	int iTagLen=CONFIGURATION_TAG_LENGTH;
+	
+	for ( i=0; g_tMatchList[i].pIndicator != NULL; i++ ) {
+		if ( 0 == memcmp(g_tMatchList[i].ucTag, pucTag, iTagLen) ) {
+			if ( (unsigned int)iDataLen > g_tMatchList[i].uiBufLen - 1 ) {
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[SetData] SetConfigurationData error 1\n");
+#endif
+				return EL_PARAM_RET_INVALID_PARAM;
+			}
+
+			iRet = ValidateAndExecuteConfigurationData(pucTag, pucData, iDataLen);
+			if ( iRet != EMV_OK ) {	
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[SetData] SetConfigurationData error 3\n");
+#endif
+				return iRet;
+			}
+			
+			memset(g_tMatchList[i].pIndicator, 0, g_tMatchList[i].uiBufLen);
+			memcpy(g_tMatchList[i].pIndicator, pucData, iDataLen);
+			g_tMatchList[i].uiDataLen = iDataLen;
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[SetConfigurationData] iDataLen = %d, pucData = %s\n", iDataLen, pucData);
+			AppLog("[SetConfigurationData] g_tMatchList[i].uiDataLen = %d, g_tMatchList[i].pIndicator = %s\n", g_tMatchList[i].uiDataLen, g_tMatchList[i].pIndicator);
+
+#endif
+			break;
+		}
+	}
+
+	//not found the tag
+	if ( g_tMatchList[i].pIndicator == NULL ) {
+#ifdef PARAMMGMT_DEBUG_
+		AppLog("[SetData] SetConfigurationData error 4\n");
+#endif
+
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+	
+	return EMV_OK;
+}
+
+int GetConfigurationData(const unsigned char *pucTag, unsigned char *pucDataOut, int *piDataLenOut)
+{
+	int i=0, iRet=-1;
+	int iTagLen=CONFIGURATION_TAG_LENGTH;
+
+	for ( i=0; g_tMatchList[i].pIndicator != NULL; i++ ) {
+		if ( 0 == memcmp(g_tMatchList[i].ucTag, pucTag, iTagLen) ) {
+
+			iRet = GetSpecifyConfigurationData(pucTag, iTagLen, g_tMatchList[i].pIndicator, &g_tMatchList[i].uiDataLen);
+			if ( iRet != EMV_OK ) {
+				return EL_PARAM_RET_INVALID_PARAM;
+			}
+
+			memcpy(pucDataOut, g_tMatchList[i].pIndicator, g_tMatchList[i].uiDataLen);
+			*piDataLenOut = g_tMatchList[i].uiDataLen;
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[GetConfigurationData] piDataLenOut = %d, pucDataOut = %s\n", *piDataLenOut, pucDataOut);
+			AppLog("[GetConfigurationData] g_tMatchList[i].uiDataLen = %d, g_tMatchList[i].pIndicator = %s\n", g_tMatchList[i].uiDataLen, g_tMatchList[i].pIndicator);
+#endif
+			break;
+		}
+	}
+
+	//not found the tag
+	if ( g_tMatchList[i].pIndicator == NULL ) {
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+
+	return EMV_OK;
+}
+
+static int ValidateTLVData(const unsigned char * paucTLVDataList, unsigned int uiTLVDataListLen,
+	unsigned char * paucWrongTag, unsigned int * punTagLen)
+{
+	int iRet=0;
+
+	if ( paucTLVDataList == NULL || paucWrongTag == NULL || punTagLen == NULL ) {
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+
+#ifndef _WIN32
+	iRet = EMV_II_CheckTagListValid(paucTLVDataList, uiTLVDataListLen, paucWrongTag, punTagLen);
+#endif
+
+	return iRet;
+}
+
+static int ValidateAndExecuteConfigurationData(const unsigned char *pucTag, const unsigned char *pucData, int iDataLen)
+{
+	int iRet=-1, iTagLen=CONFIGURATION_TAG_LENGTH;
+	unsigned long ulTmp=0;
+
+	if ( pucTag == NULL ) {
+			return EL_PARAM_RET_INVALID_PARAM;
+	}
+
+	if ( 0 == memcmp(pucTag, CMD_APP_SLEEP_TIMEOUT, iTagLen) ) {
+		PubBcd2Long((unsigned char*)pucData, 2, &ulTmp);
+		if ( (ulTmp < 0) || (ulTmp > 3000) ) {
+			return EL_PARAM_RET_INVALID_PARAM;
+		}
+ 	} else if ( 0 == memcmp(pucTag, CMD_APP_PIN_ENCRYP_TYPE, iTagLen) ) {
+ 		if ( pucData[0] < 0x00 ||  pucData[0] > 0x02) {
+			return EL_PARAM_RET_INVALID_PARAM;
+		}
+ 	} else if ( 0 == memcmp(pucTag, CMD_APP_PIN_BLOCK_MODE, iTagLen) ) {
+ 		if ( pucData[0] < 0x00 ||  pucData[0] > 0x03 ) {
+			return EL_PARAM_RET_INVALID_PARAM;
+		}
+ 	} else if ( 0 == memcmp(pucTag, CMD_APP_DATA_ENCRYP_TYPE, iTagLen) ) {
+ 		if ( pucData[0] < 0x00 ||  pucData[0] > 0x02 ) {
+			return EL_PARAM_RET_INVALID_PARAM;
+		}
+	} else if ( 0 == memcmp(pucTag, CMD_APP_FALLBACK_ALLOW, iTagLen) ) {
+		if ( pucData[0] < 0x00 ||  pucData[0] > 0x01 ) {
+			return EL_PARAM_RET_INVALID_PARAM;
+		}
+	} else if ( 0 == memcmp(pucTag, CMD_APP_PAN_MASK_START_POS, iTagLen) ) {
+		if ( pucData[0] < 0x00 ||  pucData[0] > 0x06 ) {
+			return EL_PARAM_RET_INVALID_PARAM;
+		}
+	} else if ( 0 == memcmp(pucTag, CMD_TXN_ONLINE_RESULT, iTagLen) ) {
+		if ( pucData[0] < 0x00 ||  pucData[0] > 0x02 ) {
+			return EL_PARAM_RET_INVALID_PARAM;
+		}
+	} else if ( 0 == memcmp(pucTag, CMD_TERM_TIME, iTagLen) ) {
+		if ( 0 != SetTime((unsigned char*)pucData) ) {
+			return EL_PARAM_RET_INVALID_PARAM;
+		}
+	}else {	//no limit for here.
+		return EMV_OK;
+	}
+	
+	return EMV_OK;
+}
+
+static int GetSpecifyConfigurationData(const unsigned char *pucTag, int iTagLen, unsigned char *punDataOut, int *piDataLen)
+{
+	unsigned char ucTemp[128]={0};
+	int iLen=0;
+	
+	if ( pucTag == NULL ) {
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+
+	//get battery info.
+	if ( 0 == memcmp(pucTag, CMD_TERM_BATTERY_INFO, CONFIGURATION_TAG_LENGTH) ) {
+		ucTemp[0] = BatteryCheck();
+		iLen = 1;
+	} else if ( 0 == memcmp(pucTag, CMD_TERM_TIME, CONFIGURATION_TAG_LENGTH) ) {
+		GetTime(ucTemp);
+ 		iLen = 7;		//len = 7, BCD: YYMMDDhhmmssWW
+	} else {
+		return EMV_OK;
+	}
+
+#ifdef PARAMMGMT_DEBUG_
+	AppHexLog("[GetSpecifyConfigurationData] ucTemp: ", ucTemp, iLen);
+#endif
+
+	if ( iLen != 0 ) {
+		memcpy(punDataOut, ucTemp, iLen);
+		*piDataLen = iLen;
+	}
+	
+	return EMV_OK;
+}
+
+
+int SetData(const unsigned char *pucData, unsigned char *pucSuccessTagListOut, unsigned int *puiSuccessTagListLenOut)
+{
+	int iRet=-1, iPos=0, iTagLen=0, iDataLen=0, iLengthLen=0, iLengthSubsequentByte=0, iCount=0, iOutTagLen=0;
+	unsigned char ucConfigurationTag[2+1]= {0};
+	int iTagCount=0, iSuccessCount=0, iFailCount=0;
+	int i=0, iFd=0;
+	unsigned char ucDataType=0;
+	const unsigned char *pucTlvList=NULL;
+	unsigned int uiTLVListLen=0, uiPrevTLVListLen=0, uiCurTLVListLen=0, uiFailedTagLen=0;
+	unsigned char ucFailedTag[3+1]={0};
+	unsigned short usTag=0;
+	int iRet1=0, iRet2=0, iRet3=0;
+
+	//test
+//	unsigned char ucTmp[100]={0};
+
+#ifdef PARAMMGMT_DEBUG_
+	AppLog("[SetData] Begin ========== \n");
+#endif
+
+	if ( (pucData == NULL) || (pucSuccessTagListOut == NULL) || (puiSuccessTagListLenOut == NULL) ) {
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+#ifdef PARAMMGMT_DEBUG_
+	AppLog("[SetData] pucData[0] = %d\n", pucData[0]);
+	AppLog("[SetData] pucData[1] = %d\n", pucData[1]);
+	AppLog("[SetData] pucData[2] = %d\n", pucData[2]);
+#endif
+
+	//parser income data.
+	ucDataType = pucData[0];
+	uiTLVListLen = pucData[1] * 256 + pucData[2];
+	pucTlvList = pucData + 3;
+
+	//added by kevinliu 20161027
+	if ( uiTLVListLen == 0 ) {
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+
+#ifdef PARAMMGMT_DEBUG_
+	AppLog("[SetData] ucDataType = %02x\n", ucDataType);
+	AppLog("[SetData] uiTLVListLen = %d\n", uiTLVListLen);
+//	PubBcd2Asc(pucTlvList, uiTLVListLen, ucTmp);
+//	AppLog("[SetData] pucTlvList = %s\n", ucTmp);
+	AppHexLog("[SetData] pucTlvList: ", pucTlvList, uiTLVListLen);
+#endif
+
+	//data type = EMV TLV data.
+	if ( ucDataType == PARAMMGMT_DATATYPE_EMV ) {
+
+//		while( pucTlvList[iPos] && ((unsigned int)iPos <= uiTLVListLen) ) {
+		while(((unsigned int)iPos < uiTLVListLen) ) {
+			//calculate tag length, refer to EMV tag Field structure
+			if ( 0x1F == (pucTlvList[iPos] & 0x1F) ) {
+				// Added by ZhangYuan 2016-10-18 check length
+				if ( (unsigned int)(iPos + 1) >= uiTLVListLen ) {
+					break;
+				}
+				// Added end
+				
+				if ( 0x80 == (pucTlvList[iPos + 1] & 0x80) ) {
+					iTagLen = 3;
+					usTag = 0;
+				} else {
+					iTagLen = 2;
+					usTag = pucTlvList[iPos] * 256 + pucTlvList[iPos + 1];
+				}
+			} else {
+				iTagLen = 1;
+				usTag = pucTlvList[iPos];
+			}
+
+			iTagCount++;
+			//check length
+			if ( (unsigned int)(iPos + iTagLen) >= uiTLVListLen ) {
+ 				break;
+			}
+
+			//calculate data length, refer to EMV tag Field structure
+			iCount = 0;
+			iDataLen = 0;
+			iLengthSubsequentByte = 0;
+			if ( 0x80 == (pucTlvList[iPos + iTagLen] & 0x80) ) {
+				iLengthSubsequentByte = pucTlvList[iPos + iTagLen] & 0x7F;
+
+				// Added by ZhangYuan 2016-10-18 check length
+				if ( (unsigned int)(iPos + iTagLen + iLengthSubsequentByte) >= uiTLVListLen ) {
+ 					break;
+				}
+				// Added end
+				
+				for ( i = iLengthSubsequentByte; i > 0; i-- ) {
+					if ( iCount == 0 ) {
+						iDataLen += pucTlvList[iTagLen + i];
+					} else {
+						iDataLen += pucTlvList[iTagLen + i] * iCount * 256;
+					}
+					iCount++;
+				}
+			} else {
+				iDataLen = pucTlvList[iPos + iTagLen];
+			}
+			 iLengthLen = 1 + iLengthSubsequentByte;
+			//check length
+			if ( (unsigned int)(iPos + iTagLen + iLengthLen + iDataLen) > uiTLVListLen ) {
+ 				break;
+			}
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[SetData] iTagLen = %d\n", iTagLen);
+			AppHexLog("[SetData] Tag: ", pucTlvList+iPos, iTagLen);
+			AppLog("[SetData] iLengthLen = %d\n", iLengthLen);
+			AppLog("[SetData] iDataLen = %d\n", iDataLen);
+			AppHexLog("[SetData] Value: ", pucTlvList+iPos+iTagLen+iLengthLen, iDataLen);
+#endif
+			iRet = ValidateTLVData(pucTlvList + iPos, iTagLen + iLengthLen + iDataLen, ucFailedTag, &uiFailedTagLen);
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[SetData] ValidateTLVData = %d\n", iRet);
+#endif
+			if ( (iRet == EMV_OK) && (uiFailedTagLen == 0) ) {
+				//try to set data here.
+#ifndef _WIN32
+				EMVSetTLVData(usTag, pucTlvList+iPos+iTagLen+iLengthLen, iDataLen);
+				Clss_SetTLVData_Wave(usTag, pucTlvList+iPos+iTagLen+iLengthLen, iDataLen);
+				Clss_SetTLVDataList_MC(pucTlvList + iPos, iTagLen + iLengthLen + iDataLen);
+#endif
+				//if one of these three return CLSS_API_ORDER_ERR, save the data for future use.
+				//TODO, remember delete this file when the transaction finished.
+				iFd = PdkFile_Open(TRANS_PARAM_FILE);
+				if ( iFd < 0 ) {
+					return EL_PARAM_RET_ALL_FAILED;
+				}
+
+				iRet = PdkFile_GetSize (TRANS_PARAM_FILE);
+#ifdef PARAMMGMT_DEBUG_
+				AppLog("[SetData] PdkFile_GetSize = %d\n", iRet);
+#endif
+				if ( iRet > sizeof(uiTLVListLen) ) {
+					iRet = PdkFile_Read(iFd, (unsigned char*)&uiPrevTLVListLen, sizeof(uiPrevTLVListLen)); 
+					if ( iRet != sizeof(uiPrevTLVListLen) ) {
+						// Added by ZhangYuan 2016-10-17 Close file ========
+						PdkFile_Close(iFd);
+						// Added end ================================
+						return EL_PARAM_RET_ALL_FAILED;
+					}
+				}
+
+				PdkFile_Seek(iFd, 0, SEEK_SET);
+				uiCurTLVListLen = uiPrevTLVListLen + (iTagLen + iLengthLen + iDataLen);
+				iRet = PdkFile_Write(iFd, (unsigned char*)&uiCurTLVListLen, sizeof(uiCurTLVListLen)); 
+				if ( iRet != sizeof(uiCurTLVListLen) ) {
+					// Added by ZhangYuan 2016-10-17 Close file ===
+					PdkFile_Close(iFd);
+					// Added end ============================
+					return EL_PARAM_RET_ALL_FAILED;
+				}
+				
+				PdkFile_Seek(iFd, sizeof(uiTLVListLen) + uiPrevTLVListLen, SEEK_SET);
+				iRet = PdkFile_Write(iFd, pucTlvList + iPos, iTagLen + iLengthLen + iDataLen); 
+#ifdef PARAMMGMT_DEBUG_
+				AppLog("[SetData] PdkFile_Write = %d\n", iRet);
+				AppHexLog("[SetData] PdkFile_Write data: ", pucTlvList+iPos, iTagLen + iLengthLen + iDataLen);
+#endif
+				if ( iRet != iTagLen + iLengthLen + iDataLen ) {
+					// Added by ZhangYuan 2016-10-17 Close file ========
+					PdkFile_Close(iFd);
+					// Added end ================================
+					return EL_PARAM_RET_ALL_FAILED;
+				}
+
+				PdkFile_Close(iFd);
+		 	
+				
+				memcpy(pucSuccessTagListOut + 2 + iOutTagLen, pucTlvList + iPos, iTagLen);
+				iOutTagLen += iTagLen;
+				pucSuccessTagListOut[0] = iOutTagLen /256;
+				pucSuccessTagListOut[1] = iOutTagLen % 256;
+				iSuccessCount++;
+				//special process for clss preprocess  parameter, if read from file will slow down the clss speed.s
+//				SaveClssPreProcParam(pucTlvList+iPos, iTagLen, pucTlvList+iPos+iTagLen+iLengthLen, iDataLen);
+			} else {
+				iFailCount++;
+			}
+			
+			iPos += iTagLen + iLengthLen + iDataLen;
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[SetData] iPos=%d\n", iPos);
+#endif
+		}		
+	} else if ( ucDataType == PARAMMGMT_DATATYPE_CONFIG ) {
+//		while ( pucTlvList[iPos] && ((unsigned int)iPos <= uiTLVListLen) ) {
+		while((unsigned int)iPos < uiTLVListLen)	// modified by ZhangYuan 2016-10-18
+		{
+			iTagLen = CONFIGURATION_TAG_LENGTH;
+			// Added by ZhangYuan 2016-10-18 check length
+			if ( (unsigned int)(iPos + iTagLen) >= uiTLVListLen ) {
+				break;
+			}
+			// Added end
+			iTagCount++;
+			memcpy(ucConfigurationTag, pucTlvList + iPos, iTagLen);
+
+			//calculate data length, refer to EMV tag Field structure
+			iCount = 0;
+			iDataLen = 0;
+			iLengthSubsequentByte = 0;
+			if ( 0x80 == (pucTlvList[iPos + iTagLen] & 0x80) ) {
+				iLengthSubsequentByte = pucTlvList[iPos + iTagLen] & 0x7F;
+				// Added by ZhangYuan 2016-10-18 check length
+				if ( (unsigned int)(iPos + iTagLen + iLengthSubsequentByte) >= uiTLVListLen ) {
+					break;
+				}
+				// Added end
+				for ( i = iLengthSubsequentByte; i > 0; i-- ) {
+					if ( iCount == 0 ) {
+						iDataLen += pucTlvList[iTagLen + i];
+					} else {
+						iDataLen += pucTlvList[iTagLen + i] * iCount * 256;
+					}
+					iCount++;
+				}
+			} else {
+				iDataLen = pucTlvList[iPos + iTagLen];
+			}
+			
+			iLengthLen = 1 + iLengthSubsequentByte;
+			//check length
+			if ( (unsigned int)(iPos + iTagLen + iLengthLen + iDataLen) > uiTLVListLen ) {
+				iFailCount++;
+				break;
+			}
+
+#ifdef PARAMMGMT_DEBUG_
+			AppHexLog("[SetData] tag: ", pucTlvList + iPos, iTagLen);
+			AppLog("[SetData] iDataLen = %d\n", iDataLen);
+			AppHexLog("[SetData] data: ", pucTlvList + iPos + iTagLen + iLengthLen, iDataLen);
+#endif
+
+			for ( i=0; g_tMatchList[i].pIndicator != NULL; i++ ) {
+				if ( 0 == memcmp(g_tMatchList[i].ucTag, pucTlvList + iPos, iTagLen) ) {
+					if ( (unsigned int)iDataLen > g_tMatchList[i].uiBufLen - 1 ) {
+						iFailCount++;
+						break;
+					}
+		
+					//permission control
+					if ( 0 == (DATA_PERMISSION_WRITE & g_tMatchList[i].ucPermission) ) {
+#ifdef PARAMMGMT_DEBUG_
+					AppLog("[SetData] NO DATA_PERMISSION_WRITE \n");
+#endif
+						iFailCount++;
+						break;
+					}
+		
+					iRet = ValidateAndExecuteConfigurationData(pucTlvList + iPos, pucTlvList + iPos + iTagLen + iLengthLen, iDataLen);
+					if ( iRet != EMV_OK ) { 
+						iFailCount++;
+						break;
+					}
+					
+					memset(g_tMatchList[i].pIndicator, 0, g_tMatchList[i].uiBufLen);
+					memcpy(g_tMatchList[i].pIndicator, pucTlvList + iPos + iTagLen + iLengthLen, iDataLen);
+					g_tMatchList[i].uiDataLen = iDataLen;
+
+					memcpy(pucSuccessTagListOut + 2 + iOutTagLen, pucTlvList + iPos, iTagLen);
+					iOutTagLen += iTagLen;
+					pucSuccessTagListOut[0] = iOutTagLen /256;
+					pucSuccessTagListOut[1] = iOutTagLen % 256;
+					iSuccessCount++;
+				
+					break;
+				}
+			}
+		
+			//not found the tag
+			if ( g_tMatchList[i].pIndicator == NULL ) {
+				break;
+			}
+
+			iPos = iPos + iTagLen + iLengthLen + iDataLen;
+
+		}
+	} else {
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+
+	*puiSuccessTagListLenOut = iOutTagLen + 2;
+	if ( (iSuccessCount == 0) || (iFailCount == 0) ) {
+		//all failed
+		if ( iSuccessCount == 0 ) {
+			return EL_PARAM_RET_ALL_FAILED;
+		}
+		//all success
+		if ( iFailCount == 0 ) {
+			return EMV_OK;
+		}
+	} else {
+		return EL_PARAM_RET_PARTIAL_FAILED;
+	}
+
+	return EMV_OK;
+}
+
+int GetData(const unsigned char *pucData, unsigned char *pucTLVListOut, unsigned int *puiTLVListLenOut)
+{
+	int iRet=-1, iPos=0, iTagLen=0, iDataLen=0, iLengthLen=0, iOutTLVListLen=0;
+	unsigned short usTag=0;
+	unsigned char ucData[MAX_TLVDATA_LEN]={0}, ucTag[3+1]={0}, ucLen[3+1]={0}, ucConfigurationTag[5+1]= {0};
+	int iTagCount=0, iSuccessCount=0, iFailCount=0;
+	int i=0;
+	unsigned char ucDataType=0;
+	const unsigned char *pucTagList=NULL;
+	unsigned int uiTagListLen=0;
+
+#ifdef PARAMMGMT_DEBUG_
+	AppLog("[GetData] Begin ----------------\n");
+#endif
+
+	if ( (pucData == NULL) || (pucTLVListOut == NULL) || (puiTLVListLenOut == NULL) ) {
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+
+	//parser income data.
+	ucDataType = pucData[0];
+	uiTagListLen = pucData[1] * 256 + pucData[2];
+	pucTagList = pucData + 3;
+
+#ifdef PARAMMGMT_DEBUG_
+	AppLog("[GetData] ucDataType = %02x, uiTagListLen=%d\n", ucDataType, uiTagListLen);
+	AppHexLog("[GetData] pucTagList: ", pucTagList, uiTagListLen);
+#endif
+
+	//added by kevinliu 20161027
+	if ( uiTagListLen == 0 ) {
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+
+
+	if ( ucDataType == PARAMMGMT_DATATYPE_EMV ) {
+//		while( pucTagList[iPos] && ((unsigned int)iPos <= uiTagListLen) ) {
+		while((unsigned int)iPos < uiTagListLen) // Modified by ZhangYuan 2016-10-18
+		{
+			//judge tag length
+			if ( 0x1F == (pucTagList[iPos] & 0x1F) ) {
+				// Added by ZhangYuan 2016-10-18 check length
+				//modified by Kevin
+				if ( (unsigned int)(iPos + 1) > uiTagListLen ) {
+#ifdef PARAMMGMT_DEBUG_
+					AppLog("[GetData] error 1\n");
+#endif
+
+					break;
+				}
+				// Added end
+				
+				if ( 0x80 == (pucTagList[iPos + 1] & 0x80) ) {
+					iTagLen = 3;
+					usTag = 0;
+				} else {
+					iTagLen = 2;
+					usTag = pucTagList[iPos] * 256 + pucTagList[iPos + 1];
+				}
+			} else {
+				iTagLen = 1;
+				usTag = pucTagList[iPos];
+			}
+
+			iTagCount++;
+			if ( (unsigned int)(iPos + iTagLen) > uiTagListLen ) {
+#ifdef PARAMMGMT_DEBUG_
+				AppLog("[GetData] error 2\n");
+#endif
+				iFailCount++;
+				break;
+			}
+
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[GetData] tag len = %d\n", iTagLen);
+			AppHexLog("[GetData] tag: ", pucTagList + iPos, iTagLen);
+#endif
+			
+#ifndef _WIN32
+			if (g_tTransParam.ucCurrentTxnType[0] == TRANS_TYPE_EMV_CONTACT ) {
+				iRet = EMVGetTLVData(usTag, ucData, &iDataLen);
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[GetData] TRANS_TYPE_EMV_CONTACT iRet = %d\n", iRet);
+#endif
+			} else if (g_tTransParam.ucCurrentTxnType[0] == TRANS_TYPE_CONTACTLESS && g_tTransParam.ucCurrentCLSSType[0] == CLSS_KERNEL_VISA) {
+				iRet = Clss_GetTLVData_Wave(usTag, ucData, &iDataLen);
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[GetData] CLSS_KERNEL_VISA iRet = %d\n", iRet);
+#endif
+
+			} else if (g_tTransParam.ucCurrentTxnType[0] == TRANS_TYPE_CONTACTLESS && g_tTransParam.ucCurrentCLSSType[0] == CLSS_KERNEL_MC){
+				memset(ucTag, 0, sizeof(ucTag));
+				memcpy(ucTag, pucTagList + iPos, iTagLen);
+				iRet = Clss_GetTLVDataList_MC(ucTag, iTagLen, sizeof(ucData), ucData, &iDataLen);
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[GetData] CLSS_KERNEL_MC iRet = %d\n", iRet);
+#endif
+
+			} else {
+#ifdef PARAMMGMT_DEBUG_
+			AppLog("[GetData] CLSS_KERNEL_ELSE\n");
+#endif
+
+				return EL_PARAM_RET_INVALID_PARAM;
+			}
+
+#endif	//#ifndef _WIN32
+
+			if ( iRet == EMV_OK ) {
+				//calculate length field length
+				if ( iDataLen > 0x7F ) {
+					iLengthLen = iDataLen / 0xFF + 1 + 1;
+					ucLen[0] = 0x80 | (iDataLen / 0xFF);
+					for ( i=1; i < iLengthLen; i++ ) {
+						if ( i == iLengthLen - 1 ) {
+							ucLen[i] = iDataLen & 0xFF;
+						} else {
+							ucLen[i] = (iDataLen >> (iLengthLen - 1 - i)) * 8;
+						}
+					}
+				} else {
+					iLengthLen = 1;
+					ucLen[0] = iDataLen;
+				}
+
+				memcpy(pucTLVListOut + 2 + iOutTLVListLen, pucTagList + iPos, iTagLen);
+				memcpy(pucTLVListOut + 2 + iOutTLVListLen + iTagLen, ucLen, iLengthLen);
+				memcpy(pucTLVListOut + 2 + iOutTLVListLen + iTagLen + iLengthLen, ucData, iDataLen);
+				iOutTLVListLen += iTagLen + iLengthLen + iDataLen;
+				
+				pucTLVListOut[0] = iOutTLVListLen /256;
+				pucTLVListOut[1] = iOutTLVListLen % 256;
+				
+				iSuccessCount++;
+			} else { 
+				if ( iRet == CLSS_API_ORDER_ERR ) {
+					return EL_PARAM_RET_API_ORDER_ERR;
+				}
+				iFailCount++;
+			}
+			iPos += iTagLen;
+		}
+	} else if ( ucDataType == PARAMMGMT_DATATYPE_CONFIG ) {
+
+//		while ( pucTagList[iPos] && ((unsigned int)iPos <= uiTagListLen) ) {
+		while((unsigned int)iPos < uiTagListLen) { // Modified by ZhangYuan 2016-10-18
+			iTagLen = CONFIGURATION_TAG_LENGTH;
+			memcpy(ucConfigurationTag, pucTagList + iPos, iTagLen);
+
+			iTagCount++;
+			for ( i=0; g_tMatchList[i].pIndicator != NULL; i++ ) {
+				if ( 0 == memcmp(g_tMatchList[i].ucTag, pucTagList + iPos, iTagLen) ) {
+		
+					//permission control
+					if ( 0 == (DATA_PERMISSION_READ & g_tMatchList[i].ucPermission) ) {
+#ifdef PARAMMGMT_DEBUG_
+					AppLog("[GetData] NO DATA_PERMISSION_READ \n");
+#endif
+						iFailCount++;
+						break;
+					}
+					
+					iRet = GetSpecifyConfigurationData(pucTagList + iPos, iTagLen, g_tMatchList[i].pIndicator, &g_tMatchList[i].uiDataLen);
+					if ( iRet != EMV_OK ) {
+						iFailCount++;
+						break;
+					}
+		
+					memcpy(ucData, g_tMatchList[i].pIndicator, g_tMatchList[i].uiDataLen);
+					iDataLen = g_tMatchList[i].uiDataLen;
+
+					//calculate length field length
+					if ( iDataLen > 0x7F ) {
+						if ( (iDataLen % 0xFF) == 0 ) {
+							iLengthLen = iDataLen / 0xFF + 1;
+						} else {
+							iLengthLen = (iDataLen / 0xFF + 1) + 1;
+						}
+						ucLen[0] = 0x80 | (iLengthLen - 1);
+						for ( i=1; i < iLengthLen; i++ ) {
+							if ( i == iLengthLen - 1 ) {
+								ucLen[i] = iDataLen & 0xFF;
+							} else {
+								ucLen[i] = (iDataLen >> (iLengthLen - 1 - i)) * 8;
+							}
+						}
+					} else {
+						iLengthLen = 1;
+						ucLen[0] = iDataLen;
+					}
+
+					memcpy(pucTLVListOut + 2 + iOutTLVListLen, pucTagList + iPos, iTagLen);
+					memcpy(pucTLVListOut + 2 + iOutTLVListLen + iTagLen, ucLen, iLengthLen);
+					memcpy(pucTLVListOut + 2 + iOutTLVListLen + iTagLen + iLengthLen, ucData, iDataLen);
+					iOutTLVListLen += iTagLen + iLengthLen + iDataLen;
+
+					pucTLVListOut[0] = iOutTLVListLen /256;
+					pucTLVListOut[1] = iOutTLVListLen % 256;
+
+					iSuccessCount++;
+					
+					break;
+				}
+			}
+		
+			//not found the tag
+			if ( g_tMatchList[i].pIndicator == NULL ) {
+				break;
+			}
+
+			iPos += iTagLen;
+
+		}
+	} else {
+		return EL_PARAM_RET_INVALID_PARAM;
+	}
+
+	*puiTLVListLenOut = iOutTLVListLen + 2;
+	
+#ifdef PARAMMGMT_DEBUG_
+	AppLog("[GetData] puiTLVListLenOut = %d\n", *puiTLVListLenOut);
+	AppHexLog("[GetData] pucTLVListOut: ", pucTLVListOut, *puiTLVListLenOut);
+#endif
+
+	if ( (iSuccessCount == 0) || (iFailCount == 0) ) {
+		//all failed
+		if ( iSuccessCount == 0 ) {
+			return EL_PARAM_RET_ALL_FAILED;
+		}
+		//all success
+		if ( iFailCount == 0 ) {
+			return EMV_OK;
+		}
+	} else {
+		return EL_PARAM_RET_PARTIAL_FAILED;
+	}
+
+	return EMV_OK;
+}
+
+int LoadTLVDataFromFSToMem(void)
+{
+	int iRet=0, iFd=0;
+	unsigned int uiTLVDataLen=0;
+
+	memset(sg_ucData, 0, sizeof(sg_ucData));
+	sg_iDataLen = 0;
+
+	iFd = PdkFile_Open(TRANS_PARAM_FILE);
+#ifdef PARAMMGMT_DEBUG_
+	AppLog("[LoadTLVDataFromFSToMem] PdkFile_Open ret = %d\n", iFd);
+#endif
+
+	if ( iFd < 0 ) {
+		return EL_PARAM_RET_ALL_FAILED;
+	}
+
+	iRet = PdkFile_Read(iFd, (unsigned char*)&uiTLVDataLen, sizeof(uiTLVDataLen)); 
+#ifdef PARAMMGMT_DEBUG_
+		AppLog("[LoadTLVDataFromFSToMem] PdkFile_Read ret = %d, uiTLVDataLen = %d\n", iRet, uiTLVDataLen);
+#endif
+
+	if ( (iRet != sizeof(uiTLVDataLen)) || (!uiTLVDataLen) ) {	//if uiTLVDataLen = 0, no data
+		PdkFile_Close(iFd);
+		PdkFile_Remove(TRANS_PARAM_FILE);		//added by kevinliu 20161025
+		return EL_PARAM_RET_ALL_FAILED;
+	}
+
+//the following code could work on monitor and prolin, not monitor mini.-------------------------------
+/*	
+	if ( sg_pucData ) {
+		free(sg_pucData);
+		sg_pucData = NULL;
+		sg_iDataLen = 0;
+	}
+	sg_pucData = (unsigned char*)malloc(uiTLVDataLen);
+	if ( !sg_pucData ) {
+		return EL_PARAM_RET_ALL_FAILED;
+	}
+*/
+//------------------------------------------------------------------------------------------
+
+
+//	iRet = PdkFile_Read(iFd, sg_pucData, uiTLVDataLen);
+	iRet = PdkFile_Read(iFd, sg_ucData, uiTLVDataLen);
+#ifdef PARAMMGMT_DEBUG_
+		AppLog("[LoadTLVDataFromFSToMem] PdkFile_Read ret = %d\n", iRet);
+#endif
+
+	if ( iRet != uiTLVDataLen ) {
+//the following code could work on monitor and prolin, not monitor mini.-------------------------------
+/*
+		free(sg_pucData);
+		sg_pucData = NULL;
+		sg_iDataLen = 0;
+*/
+//----------------------------------------------------------------------------------------
+		PdkFile_Close(iFd);
+		PdkFile_Remove(TRANS_PARAM_FILE);		//added by kevinliu 20161025
+		return EL_PARAM_RET_ALL_FAILED;
+	}
+
+	sg_iDataLen = uiTLVDataLen;
+	PdkFile_Close(iFd);
+	
+	PdkFile_Remove(TRANS_PARAM_FILE);
+
+#ifdef PARAMMGMT_DEBUG_
+	AppHexLog("[LoadTLVDataFromFSToMem] sg_ucData: ", sg_ucData, sg_iDataLen);
+#endif
+
+
+	return EMV_OK;
+}
+
+int GetAllTLVDataFromMem(unsigned char *pucDataOut, int *piDataLen)
+{
+	int iRet=0;
+
+//	if ( (!sg_pucData) || (!sg_iDataLen) ) {
+	if ( (!sg_ucData) || (!sg_iDataLen) ) {
+		return EL_PARAM_RET_ALL_FAILED;
+	}
+
+//the following code could work on monitor and prolin, not monitor mini.-------------------------------
+/*
+	memcpy(pucDataOut, sg_pucData, sg_iDataLen);
+	*piDataLen = sg_iDataLen;
+
+	free(sg_pucData);
+	sg_pucData = NULL;
+	sg_iDataLen = 0;
+*/
+//-----------------------------------------------------------------------------------------
+
+	memcpy(pucDataOut, sg_ucData, sg_iDataLen);
+	*piDataLen = sg_iDataLen;
+
+#ifdef PARAMMGMT_DEBUG_
+	AppHexLog("[GetAllTLVDataFromMem] pucDataOut: ", pucDataOut, *piDataLen);
+#endif
+
+	return EMV_OK;
+}
+
+

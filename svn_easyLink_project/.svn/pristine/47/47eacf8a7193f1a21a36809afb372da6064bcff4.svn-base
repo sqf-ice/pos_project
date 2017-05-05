@@ -1,0 +1,89 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date:2016/08/09     
+ * Module Auth:huangwp     
+ * Description:xmlparse module
+
+ *      
+ * ============================================================================
+ */
+
+
+#ifndef _XMLPARSE_H
+#define _XMLPARSE_H
+
+#define XML_DEBUG
+
+#define XML_ERR_BASE     			   -3000
+#define XML_ERR_INVALID_PARAM          XML_ERR_BASE-1
+#define XML_ERR_FROMAT_ERR             XML_ERR_BASE-2
+#define XML_ERR_NODE_NOT_FOUND         XML_ERR_BASE-3
+#define XML_ERR_ATTR_NULL        	   XML_ERR_BASE-4
+
+
+#define XML_PARSE_OK                   0
+
+
+#define XML_NODE_NO_ATTR          1
+#define XML_NODE_END              2    //</Node>
+#define XML_NODE_HAVE_ATTR        3
+
+#define XML_RETURNCODE_BASE     		 100
+#define XML_LINE_END_TAG_NULL            XML_RETURNCODE_BASE+1
+
+typedef struct RecordXmlParentNode
+{
+	uchar ParentNodeName[10][32];
+	uint Depth;
+}RecordXmlParentNode;
+
+
+
+
+typedef int (GetAttrValue)(const uchar *pucXmlOneLine, const uchar *AttrName, uchar *OutValue);
+typedef int (GetNodeValue)(const uchar *pucXmlOneLine, const uchar *NodeName, uchar *OutValue);
+
+
+typedef struct XmlNode
+{
+    uchar ParentNode[32];
+    uchar NodeName[32];
+	uchar AttrName[32];
+	GetAttrValue *GetAttrFunc;
+	GetNodeValue *GetValueFunc;
+
+}XmlNode;
+
+typedef struct TextBox
+{
+    uint NodeIndex;
+	uchar AttrName[32];
+}stTextBox;
+
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+int XmlParseGetAttrValue(const uchar *pucXmlOneLine, uchar *pucAttrName, uchar *pucOutValue);
+int XmlParseGetNodeValue(const uchar *pucXmlOneLine, uchar *pucNodeName, uchar *pucOutValue);
+int XmlGetOneLineData(const uchar *pucBufIn, int *OutLen, char *pucOutOneLineData);
+int IsXmlLineHaveAttr(const uchar *pucXmlOneLine);
+
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#pragma pack()
+
+
+#endif
+

@@ -1,0 +1,61 @@
+//============================================================================
+// Name        : filedownload.h
+// Author      :tuxq
+// Version     :
+// Copyright   : Your copyright notice
+// Description : Ansi-style
+//============================================================================
+
+#ifndef FILEDOWNLOAD_H
+#define FILEDOWNLOAD_H
+
+#define FILEBLKLIST_MAX		20
+#define FILENAME_LENGTH_MAX 32
+#define BLK_LENGTH_MAX 1024
+
+#define UI_FILE "ui.xml"
+#define EMV_FILE "emv.xml"
+
+#define UI_FILE_BLK_START	1000
+#define UI_FILE_BLK_END		1000
+#define EMV_FILE_BLK_START	2000
+#define EMV_FILE_BLK_END	2000
+
+//file type
+#define MONITOR_FILE		0x00//.bin
+#define PROLIN_OS_FILE		0x01//.os
+#define PROLIN_APP_FILE		0x02//.aip
+#define	FONT_FILE			0x03//.font
+#define PARA_FILE			0x04//.
+
+typedef struct _SFileInfo{
+	uchar ucFileName[32];		//filename
+	uint uiFileSize;			//file size
+	uint uiFileOffset;			//file offset
+	uint uiCurFileSize;			//current trans file size
+	uchar ucFileContent[1024];	//current trans file content
+}SFileInfo;
+
+typedef struct _SFileBlkInfo{
+	uchar	ucFileName[FILENAME_LENGTH_MAX];	//filename
+	ushort usFileBlkStart;						//file block start location
+	ushort usFileBlkEnd;						//file block end location
+	ushort usFileBlkCurIndex;					//file block current index
+	ushort usFileBlkCurOffset;					//file block current offset
+}SFileBlkInfo;
+
+
+enum FILEDOWNLOAD_RET												
+{
+	FILEDOWNLOAD_ERR_BASE				=(7000),
+	FILEDOWNLOAD_ERR_BLKOVERSIZE		=(FILEDOWNLOAD_ERR_BASE+1),	//block oversize
+	FILEDOWNLOAD_ERR_OPENFAILED			=(FILEDOWNLOAD_ERR_BASE+2),	//open file failed
+	FILEDOWNLOAD_ERR_FILEEXIST			=(FILEDOWNLOAD_ERR_BASE+3),	//file exist
+	FILEDOWNLOAD_ERR_WRITEFAILED		=(FILEDOWNLOAD_ERR_BASE+4),	//write file failed
+	FILEDOWNLOAD_ERR_FIRMWARE_SAVE		=(FILEDOWNLOAD_ERR_BASE+5),	//firmware file save failed
+	FILEDOWNLOAD_ERR_PARAFILE_SAVE      =(FILEDOWNLOAD_ERR_BASE+6),	//parameter file save failed
+};
+
+int	DownloadFile(const uchar * pucRequest, const ushort usReqLength);
+
+#endif

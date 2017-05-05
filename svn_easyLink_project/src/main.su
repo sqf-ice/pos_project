@@ -1,0 +1,14 @@
+main.c:63:5:event_main	8	static
+main.c:69:5:ReadFileInfo	80	static
+main.c:102:6:PubTrimHeadChars	8	static
+main.c:120:6:PubAddHeadChars	16	static
+main.c:140:5:CalcDispX	8	static
+main.c:177:5:InputAmount	72	static
+main.c:263:6:GetDateTime	40	static
+main.c:274:6:GetTransAmount	40	static
+main.c:299:6:InitUSB	0	static
+main.c:305:6:RemoveCard	16	static
+main.c:315:6:loadTestKey	176	static
+main.c:340:5:TestParamManage	480	static
+main.c:408:6:SysInfoInit	80	static
+main.c:547:5:main	48	static

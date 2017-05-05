@@ -1,0 +1,195 @@
+/*------------------------------------------------------------
+* FileName: parammgmt.h
+* Author: liukai
+* Date: 2016-08-03
+------------------------------------------------------------*/
+#ifndef PARAMMGMT_H
+#define PARAMMGMT_H
+
+//return code
+#define EL_PARAM_RET_BASE			5000
+#define EL_PARAM_RET_ALL_FAILED		5001
+#define EL_PARAM_RET_PARTIAL_FAILED	5002
+#define EL_PARAM_RET_INVALID_PARAM	5003
+#define EL_PARAM_RET_SIZE_SMALL		5004
+#define EL_PARAM_RET_API_ORDER_ERR	5005
+
+#define PARAMMGMT_DATATYPE_EMV			1
+#define PARAMMGMT_DATATYPE_CONFIG		2
+
+#define MAX_TLVDATA_LEN		1024
+
+typedef enum ETransInputType {
+	TRANS_TYPE_NONE	= 0,
+	TRANS_TYPE_MAGNETIC = 1,
+	TRANS_TYPE_FALLBACK_MAGNETIC = 2,	//added by Kevin Liu 20160901
+	TRANS_TYPE_EMV_CONTACT = 3,	
+	TRANS_TYPE_CONTACTLESS = 4,
+} TRANSINPUTTYPE;
+
+typedef enum ECLSSKernelType {
+	CLSS_KERNEL_DEF = 0,
+	CLSS_KERNEL_JCB = 1,
+	CLSS_KERNEL_MC = 2,
+	CLSS_KERNEL_VISA = 3,
+	CLSS_KERNEL_PBOC = 4,
+	CLSS_KERNEL_AE = 5,
+	CLSS_KERNEL_ZIP = 6,
+	CLSS_KERNEL_FLASH = 7,
+	CLSS_KERNEL_EFT = 8,
+	CLSS_KERNEL_RFU = 0xFF,
+} CLSSKERNELTYPE;
+
+typedef enum ETransPathType {
+	TRANS_PATH_TYPE_CLSS_PATH_NORMAL = 0,
+	TRANS_PATH_TYPE_CLSS_VISA_MSD = 1,
+	TRANS_PATH_TYPE_CLSS_VISA_QVSDC = 2,
+	TRANS_PATH_TYPE_CLSS_VISA_VSDC = 3,
+	TRANS_PATH_TYPE_CLSS_VISA_CONTACT = 4,
+	TRANS_PATH_TYPE_CLSS_MC_MAG = 5,
+	TRANS_PATH_TYPE_CLSS_MC_MCHIP = 6,
+	TRANS_PATH_TYPE_CLSS_VISA_WAVE2 = 7,
+	TRANS_PATH_TYPE_CLSS_JCB_WAVE2 = 8,
+	TRANS_PATH_TYPE_CLSS_VISA_MSD_CVN17 = 9,
+	TRANS_PATH_TYPE_CLSS_VISA_MSD_LEGACY = 10,
+} TRANSPATHTYPE;
+
+typedef enum EOnlineAuthResult {
+	ONLINE_AUTH_RESULT_APPROVED = 0,
+	ONLINE_AUTH_RESULT_DECLINED = 1,
+	ONLINE_AUTH_RESULT_CONNECT_HOST_FAILED = 2,
+} ONLINEAUTHRESULT;
+
+// ====== Added by zhangyuan 2016-08-08 =============
+#define APPPARAM_PIN_ENCRYPT_TYPE_DUKPT		0x00	
+#define APPPARAM_PIN_ENCRYPT_TYPE_TDES		0x01
+
+#define APPPARAM_DATA_ENCRYPT_TYPE_NONE		0x00
+#define APPPARAM_DATA_ENCRYPT_TYPE_TDES		0x01
+#define APPPARAM_DATA_ENCRYPT_TYPE_RSA		0x02
+
+#define APPPARAM_FALLBACK_NOT_ALLOW			0x00
+#define APPPARAM_FALLBACK_ALLOW				0x01
+// ======= Added end ================================
+
+typedef struct STerminalInfo {
+	unsigned char ucTermSN[32+1];
+	unsigned char ucTermModelCode[6+1];
+	unsigned char ucTermPrinterInfo[1+1];
+	unsigned char ucTermModemExist[1+1];
+	unsigned char ucTermUSBExist[1+1];
+	unsigned char ucTermLANExist[1+1];
+	unsigned char ucTermGPRSExist[1+1];
+	unsigned char ucTermCDMAExist[1+1];
+	unsigned char ucTermWIFIExist[1+1];
+	unsigned char ucTermRFExist[1+1];
+	unsigned char ucTermICExist[1+1];
+	unsigned char ucTermMAGExist[1+1];
+	unsigned char ucTermTILTExist[1+1];
+	unsigned char ucTermWCDMAExist[1+1];
+	unsigned char ucTermTOUCHSCRExist[1+1];
+	unsigned char ucTermCOLORSCRExist[1+1];
+	unsigned char ucTermScrSize[4+1];
+	
+	unsigned char ucTermAppName[33+1];
+	unsigned char ucTermAppVer[33+1];
+	unsigned char ucTermAppSoName[33+1];
+	unsigned char ucTermAppSoVer[33+1];
+	unsigned char ucTermPubSoName[33+1];
+	unsigned char ucTermPubSoVer[33+1];
+	unsigned char ucTermBatteryInfo[1+1];
+	unsigned char ucTermRestFSSize[12+1];
+	unsigned char ucTermOSName[24+1];
+	unsigned char ucTermOSVer[8+1];
+}  DATA_TERMINFO;
+
+typedef struct SAppParam {
+	unsigned char ucSleepModeTimeout[4+1];
+	unsigned char ucPINEncryptionType[1+1];
+	unsigned char ucPINEncryptionKeyIdx[1+1];
+	unsigned char ucPINBlockMode[1+1]; 
+	unsigned char ucDataEncryptionType[1+1];
+	unsigned char ucDataEncryptionKeyIdx[2+1];
+	unsigned char ucPANMaskStartPos[1+1];
+
+	unsigned char ucFallbackAllowFlag[1+1];	// added by zhangyuan
+} DATA_APPPARAM;
+
+#define MODE_ONLINE_PIN_INPUT	0x01	// added by zhangyuan
+typedef struct STransParam {
+	unsigned char ucCurrentTxnType[1+1];
+	unsigned char ucCurrentCLSSType[1+1];
+	unsigned char ucCurrentPathType[1+1];
+	//unsigned char ucFallbackAllowFlag[1+1];		// noted by zhangyuan
+	unsigned char ucTrackOneData[79+1];
+	unsigned char ucTrackTwoData[37+1];
+	unsigned char ucTrackThreeData[107+1];
+	
+	unsigned char ucOnlineResult[1+1];		//modified by Kevin Liu 20160902
+	unsigned char ucRspCode[2+1];			//added by Kevin Liu
+	unsigned char ucAuthCode[6+1];
+	unsigned char ucAuthData[16+1];
+	unsigned char ucAuthDataLen[2+1];
+	unsigned char ucIssuerScript[300+1];
+	unsigned char ucIssuerScriptLen[2+1];
+
+	// --- Added by zhangyuan 2016-08-08 --------
+	unsigned char ucOnlinePinInput[1+1];		// Online PIN input: 0-no, 1-yes;
+	unsigned char ucPinBlock[8+1];
+	unsigned char ucKsn[10+1];
+	// --- Added end ----------------------------
+} DATA_TRANSPARAM;
+
+
+//permission control
+#define DATA_PERMISSION_WRITE			0x01
+#define DATA_PERMISSION_READ			0x02
+#define DATA_PERMISSION_READ_WRITE	0x03
+
+typedef struct SMatchList {
+	unsigned char ucTag[2+1];
+	unsigned char *pIndicator;
+	unsigned int uiBufLen;
+	unsigned char ucPermission;
+} DATA_MATCHLIST;
+
+
+extern DATA_APPPARAM g_tAppParam;
+extern DATA_TRANSPARAM g_tTransParam;
+extern DATA_MATCHLIST g_tMatchList[];
+
+//functions
+
+/*************************************************************************
+Function: 					SetData
+Parameters Input:				pucData
+Parameters Output:			pucSuccessTagListOut, puiSuccessTagListLenOut
+Return Code:					Find the definations.
+Description:					set EMV and Contactless kernel tags and Configuration Data.
+*************************************************************************/
+int SetData(const unsigned char *pucData, unsigned char *pucSuccessTagListOut, unsigned int *puiSuccessTagListLenOut);
+
+
+/*************************************************************************
+Function: 					GetData
+Parameters Input:				pucData
+Parameters Output:			pucTLVListOut, puiTLVListLenOut
+Return Code:					Find the definations.
+Description:					get EMV and Contactless kernel tags and Configuration Data.
+*************************************************************************/
+int GetData(const unsigned char *pucData, unsigned char *pucTLVListOut, unsigned int *puiTLVListLenOut);
+
+
+/*************************************************************************
+Function: 					GetTLVDataFromFS
+Parameters Input:				ucDataOutputBufLen
+Parameters Output:			pucDataOutput, piDataLen
+Return Code:					Find the definations.
+Description:					get EMV and Contactless kernel tags and Configuration Data.
+*************************************************************************/
+int GetTLVDataFromFS(int iDataOutputBufLen, unsigned char *pucDataOutput, int *piDataLen);
+
+
+
+
+#endif

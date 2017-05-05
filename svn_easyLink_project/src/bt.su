@@ -1,0 +1,3 @@
+bt.c:19:5:BtOpen	16	static
+bt.c:107:5:BtPairKey	96	static
+bt.c:173:5:InitBlueTooth	144	static

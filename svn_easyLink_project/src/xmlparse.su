@@ -1,0 +1,8 @@
+xmlparse.c:221:12:GetXmlNodeValue	24	static
+xmlparse.c:151:12:GetXmlAttrValue	144	static
+xmlparse.c:99:12:ParseXml	8	static
+xmlparse.c:52:5:EmvParaEndTag	0	static
+xmlparse.c:59:5:IsXmlLineHaveAttr	16	static
+xmlparse.c:265:5:XmlParseGetNodeValue	128	static
+xmlparse.c:291:5:XmlParseGetAttrValue	128	static
+xmlparse.c:318:5:XmlGetOneLineData	16	static

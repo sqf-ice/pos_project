@@ -1,0 +1,900 @@
+/*------------------------------------------------------------
+* FileName: EmvProc.c
+* Author:	ZhangYuan
+* Date:		2016-08-08
+------------------------------------------------------------*/
+//Modified by kevin
+#include "..\inc\global.h"
+/*
+#include <posapi.h>
+#include <string.h>
+#include <stdarg.h>
+
+#include "..\inc\EmvIIApi.h"
+#include "..\inc\EmvApi.h"
+#include "..\inc\EmvProc.h"
+#include "..\inc\parammgmt.h"
+#include "..\inc\appLib.h"
+*/
+#define EMV_PARAM_DEBUG_ 1
+#ifdef EMV_PARAM_DEBUG_
+#include "..\inc\EmvTest.h"
+#endif
+
+//#define DEBUG_			1
+#define DEBUG_SERIAL	1
+#define PORT_USB		11
+#define PORT_BLUETOOTH	7
+/* removed by Kevin Liu 20160901
+DATA_APPPARAM	g_tAppParam;
+DATA_TRANSPARAM	g_tTransParam;
+*/
+extern Clss_TransParam	g_stClssTransParam;
+
+#ifdef EMV_PARAM_TEST_
+extern EMVParamInfo		g_stEmvParamInfo;
+
+extern void LoadEmvTLVFromFS(void);
+#endif
+
+#ifdef DEBUG_
+void AppLog(char *formatString, ...);
+void AppHexLog(unsigned char *pucMsg, unsigned char *pucData, int iDataLen);
+#endif
+
+
+// ==================== CALLBACK FUNCTIONS ==============================================
+
+int cEMVCandAppSel (int TryCnt, EMV_CANDLIST  List[], int AppNum)
+{
+	int				i=0, iRet=0;
+	unsigned char 	aucTitle[DISP_MAX_LEN+1]="Select App:";
+
+#ifndef EUI_
+	MenuItem stAppMenu[MAX_APP_ITEMS];	// for D180, the surpported max app number is 5
+#else
+	ST_DISP stAppMenu[MAX_APP_ITEMS];
+#endif
+
+	memset(&stAppMenu, 0, sizeof(stAppMenu));
+	for(i=0; i<MIN(AppNum, MAX_APP_ITEMS); i++)
+	{
+#ifndef EUI_
+		sprintf((char *)stAppMenu[i].szMenuName, "%.16s", List[i].aucAppLabel);
+#else
+		sprintf((char *)stAppMenu[iLoop].ucText, "%.16s", List[i].aucAppLabel);
+#endif
+	}
+	
+#ifndef EUI_
+	iRet = SelectMenu(aucTitle, MIN(MAX_APP_ITEMS, AppNum), stAppMenu, 60);
+#else
+	// TODO
+	iRet = ShowMenuList(....);
+
+#endif
+
+	return iRet;
+}
+
+int cEMVInputAmount(unsigned long *AuthAmt, unsigned long *CashBackAmt)
+{
+	return 0;
+}
+
+int cEMVGetHolderPwd(int TryFlag, int RemainCnt, unsigned char *pin)
+{
+	int				iRet=0, iLen=0;
+	unsigned char 	aucBuf[19], aucPan[19+1], aucShiftedPan[19+1];
+#ifndef EUI_
+	char			szPromptMsg[DISP_MAX_LEN+1]="Enter PIN:";
+#endif
+
+#ifdef DEBUG_
+	AppLog("[cEMVGetHolderPwd] TryFlag=%d, RemainCnt=%d, PIN[0]=%02x\n", TryFlag, RemainCnt, pin != NULL ? pin[0] : 0xff);
+#endif
+
+	if(pin == NULL)		// online PIN process
+	{
+#ifdef DEBUG_
+		AppLog("[cEMVGetHolderPwd] Online PIN processing...\n");
+#endif
+		memset(aucBuf, 0, sizeof(aucBuf));
+		memset(aucPan, 0, sizeof(aucPan));
+#ifndef _WIN32
+		iRet = EMVGetTLVData(0x5A, aucPan, &iLen);		
+#endif
+#ifdef DEBUG_
+		AppLog("[cEMVGetHolderPwd] EMVGetTLVData=%d, Tag: 0x5A, Len: %d, Value: %s\n", iRet, iLen, aucPan);
+		AppHexLog("[cEMVGetHolderPwd] Value: ", aucBuf, iLen);
+#endif
+		PubBcd2Asc(aucBuf, iLen, aucPan);
+		iLen = strlen(aucPan);
+		if (iRet != EMV_OK || iLen<13 || iLen>19)
+		{
+			// TODO  which error number should be returned
+			return EMV_NO_PINPAD;	// Other error, rutrn EMV_NO_PINPAD
+		}
+		
+#ifndef SECURITY_DEBUG_
+		memset(aucShiftedPan, 0, sizeof(aucShiftedPan));
+		iRet = PubExtractPAN(aucPan, aucShiftedPan);
+#ifdef DEBUG_
+		AppLog("[cEMVGetHolderPwd] PubExtractPAN=%d\n", iRet);
+		AppHexLog("[cEMVGetHolderPwd] aucShiftedPan: ", aucShiftedPan, strlen(aucPan));
+#endif
+		if( iRet!=0 )
+		{
+			// TODO  which error number should be returned
+			return EMV_NO_PINPAD;
+		}
+		
+#ifndef EUI_
+		ScrCls();
+		PubDispString(szPromptMsg,0|DISP_LINE_LEFT|DISP_LINE_REVER);
+		ScrGotoxy(100, 4);
+#else //EUI_
+		// TODO
+
+#endif
+
+		iRet =  PedGetPinBlock(1, (uchar *)"0,4,5,6,7,8,9,10,11,12", aucShiftedPan, g_tTransParam.ucPinBlock, 0x00, 60000); // ISO9564 format 0
+#ifdef DEBUG_
+		AppLog("[cEMVGetHolderPwd] PedGetPinBlock=%d, KeyIndex=%d\n", iRet, 1);
+#endif
+#else // SECURITY_DEBUG_
+		// TODO
+		//int PedEncryptPin(aucPan, uchar *pucPinBlockOut,uchar *ksnOut);
+		iRet = PedEncryptPin(aucPan, g_tTransParam.ucPinBlock, g_tTransParam.ucKsn);
+#endif
+
+		if (PED_RET_OK == iRet)
+		{
+			g_tTransParam.ucOnlinePinInput[0] = MODE_ONLINE_PIN_INPUT;
+			return EMV_OK;
+		}
+		else
+		{
+			if (PED_RET_ERR_NO_PIN_INPUT == iRet)
+	        {	// PIN Bypass
+				return EMV_NO_PASSWORD;
+	        }
+			else if (PED_RET_ERR_INPUT_CANCEL == iRet)
+			{	// User cancel
+				return EMV_USER_CANCEL;
+			}
+			else if (PED_RET_ERR_INPUT_TIMEOUT == iRet)
+			{	// PIN entry time out
+				return EMV_TIME_OUT;
+			}
+			else
+			{
+				return EMV_NO_PINPAD;
+			}
+		}	
+	}
+	else	// offline PIN process
+	{
+#ifdef DEBUG_
+		AppLog("[cEMVGetHolderPwd] Offline PIN processing...\n");
+#endif
+		if (1 == RemainCnt)
+		{
+#ifndef EUI_
+			char szWarnMsg[DISP_MAX_LEN+1]="LAST ENTER PIN:";
+			ScrCls();	// For D180, there are only 6 lines (in small font, and 3 lines in big font)
+			PubDispString(szWarnMsg, 2|DISP_LINE_LEFT);
+#else
+			// TODO 
+			// call <ShowMsg> to  prompt "LAST ENTER PIN"
+#endif
+		}
+#ifndef EUI_
+		//ScrCls();
+		PubDispString(szPromptMsg,0|DISP_LINE_LEFT|DISP_LINE_REVER);
+#else
+		// TODO
+		// call <ShowMsg> to prompt "PLS INPUT PIN"
+#endif
+		if (0 != TryFlag)
+		{
+#ifndef EUI_
+			char szWarnMsg[DISP_MAX_LEN+1]="PIN ERR,RETRY";
+			PubDispString(szWarnMsg, 2|DISP_LINE_LEFT);
+#else
+			// TODO 
+			// call <ShowMsg> to  prompt "PIN ERR,RETRY"
+#endif
+		}
+	
+		if (pin[0]==EMV_PED_TIMEOUT)
+		{
+#ifndef EUI_
+			char szWarnMsg[DISP_MAX_LEN+1]="TIMEOUT";
+			// EMV core has processed PIN entry and it's timeout
+			ScrCls();
+			PubDispString(szWarnMsg, 2|DISP_LINE_LEFT);
+#else
+			// TODO 
+			// call <ShowMsg> to  prompt "TIME OUT"
+#endif
+			return EMV_TIME_OUT;
+		}
+		else if (pin[0]==EMV_PED_WAIT)
+		{
+			// PED is called too frequently
+			DelayMs(1000);
+			ScrCls();
+			ScrGotoxy(100, 4);
+			return EMV_OK;
+		}
+		else if (pin[0]==EMV_PED_FAIL)
+		{
+#ifndef EUI_
+			char szWarnMsg[DISP_MAX_LEN+1]="PED ERROR";
+			// EMV core has processed PIN entry and PED failed.
+			ScrClrLine(2, 7);
+			PubDispString(szWarnMsg, 2|DISP_LINE_LEFT);
+			PubBeepErr();
+#else
+			// TODO 
+			// call <ShowMsg> to  prompt "PED ERROR"
+#endif
+			return EMV_NO_PINPAD;
+		}
+		else
+		{
+			// EMV PIN not processed yet. So just display.
+			ScrGotoxy(100, 4);
+			return EMV_OK;
+		}
+	}
+	
+	return 0;
+}
+
+void cEMVVerifyPINOK(void)
+{
+#ifndef EUI_
+	char pDispStr[DISP_MAX_LEN+1]="PIN VERIFY OK!";
+	ScrCls();
+	PubDispString(pDispStr, 2|DISP_LINE_LEFT);
+	DelayMs(50);
+#else
+	// TODO
+	//int ShowMsgBox(const uchar *pszPageName, const ST_DISP *pstTxtInfo, const uchar  ucInfoNum,  const ST_PICTURE*  pstPicInfo ,const uchar ucPicNum, const int iTimeOut);
+
+#endif
+
+	return;
+}
+
+int  cCertVerify(void)
+{
+	// Card holder certificate verification. This is only be used for PBOC3.0
+	return 0;
+}
+
+int  cEMVSetParam(void)
+{
+//	Note: the information below come from D180 EMV API document	
+//	1.	该接口用于在最终选择执行之后，取处理选项命令发送前，根据最终选择的AID名称或具体的应用需要，设置与该AID或与当前交易对应的参数。
+//	2.	应用程序在该接口中调用 EMVSetTLVData 接口设置所需的参数。
+//	3.	当该函数返回值不为EMV_OK时，内核将立即退出交易处理过程。
+
+	return 0;
+}
+
+
+unsigned char cEMVIccIsoCommand(unsigned char slot, APDU_SEND *ApduSend, APDU_RESP *ApduRecv)
+{
+    unsigned char status = IccIsoCommand(slot, ApduSend, ApduRecv);
+#ifdef EMV_DEBUG_OUTPUT_LOG
+	SendICCLog(ApduSend, ApduRecv);
+#endif
+	if (0x00 == status)
+    {
+        return 0x00;
+    }
+    else
+    {
+        return 0x01;
+    }
+}
+
+// 由于新架构的EMV库是基于Public库，为了节省空间，EMVAddApp仅添加了AID列表到内核，AID相关参数并未保存，内核仅在最终应用选择后保存一份AID相关参数（即最终应用选择选中的AID对应的参数）用于交易处理。
+// 应用层需要在最终应用选择之后（可以放在cEMVSetParam中），调用EMVModFinalAppPara(&tEMV_APP);将最终选中的AID对应的结构体参数重新设置到内核。
+int EMVSetFinalApp2Kernel()
+{
+	int				iRet=0, iAidLen=0;
+	unsigned char	aucAid[17+1];
+
+#ifndef _WIN32
+	iRet=EMVGetTLVData(0x9F06, aucAid, &iAidLen);
+#endif
+#ifdef DEBUG_
+	AppLog("[EMVSetFinalApp2Kernel] EMVGetTLVData=%d, Tag: 9F06\n", iRet);
+#endif
+	if(iRet == EMV_OK)
+	{
+		EMV_APPLIST stEmvApp;
+
+		memset(&stEmvApp, 0, sizeof(EMV_APPLIST));
+		
+#ifdef EMV_PARAM_TEST_
+		iRet = EMVLoadSpecificApp(aucAid, iAidLen, &stEmvApp);
+#ifdef DEBUG_
+		AppLog("[EMVSetFinalApp2Kernel] EMVLoadSpecificApp=%d\n", iRet);
+#endif
+		if(iRet == 0)
+		{
+#ifndef _WIN32
+			iRet = EMVModFinalAppPara(&stEmvApp);
+#ifdef DEBUG_
+			AppLog("[EMVSetFinalApp2Kernel] EMVModFinalAppPara=%d\n", iRet);
+#endif
+#endif
+		}
+#else
+	// TODO Load specific APP from table file system;
+#endif
+	}
+
+	return iRet;
+}
+
+int EMVSetCAPK2Kernel()
+{
+	int				iRet=0, iAidLen=0, iLen=0;
+	unsigned char	aucAid[17+1], ucCapkKeyIdx=0x00;
+	EMV_CAPK		stEmvCapk;
+	EMV_REVOCLIST	stEmvRevocList;	// Added by ZhangYuan 2016-11-16
+
+	// Application ID
+	memset(aucAid, 0, sizeof(aucAid));
+#ifndef _WIN32
+	iRet = EMVGetTLVData(0x4F, aucAid, &iAidLen);	// AID
+#endif
+#ifdef DEBUG_
+	AppLog("[EMVSetCAPK2Kernel] EMVGetTLVData=%d, Tag: 4F, Len=%d, Value:%02x %02x %02x %02x %02x\n", iRet, iAidLen, aucAid[0], aucAid[1], aucAid[2], aucAid[3], aucAid[4]);
+#endif
+	if(iRet != EMV_OK)
+	{
+		return EL_EMV_RET_CARD_DATA_ERR;
+	}
+
+#ifndef _WIN32
+	iRet = EMVGetTLVData(0x8F, &ucCapkKeyIdx, &iLen);
+#endif
+#ifdef DEBUG_
+	AppLog("[EMVSetCAPK2Kernel] EMVGetTLVData=%d, Tag: 8F, Len=%d, Value=%02x\n", iRet, iLen, ucCapkKeyIdx);
+#endif
+	if(iRet != EMV_OK)
+	{
+		return EL_EMV_RET_CARD_DATA_ERR;
+	}	
+
+	// Load specific CAPK from table file system and set it into kernel
+#ifdef EMV_PARAM_TEST_
+	memset(&stEmvCapk, 0, sizeof(stEmvCapk));
+	iRet = EMVLoadSpecificCapk(aucAid, ucCapkKeyIdx, &stEmvCapk);
+#ifdef DEBUG_
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.RID: ", stEmvCapk.RID, 5);
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.KeyID: ", &stEmvCapk.KeyID, 1);
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.HashInd: ", &stEmvCapk.HashInd, 1);
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.ArithInd: ", &stEmvCapk.ArithInd, 1);
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.ModulLen: ", &stEmvCapk.ModulLen, 1);
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.Modul: ", stEmvCapk.Modul, stEmvCapk.ModulLen);
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.ExponentLen: ", &stEmvCapk.ExponentLen, 1);
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.Exponent: ", stEmvCapk.Exponent, stEmvCapk.ExponentLen);
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.ExpDate: ", stEmvCapk.ExpDate, 3);
+	AppHexLog("[EMVSetCAPK2Kernel] CAPK.CheckSum: ", stEmvCapk.CheckSum, 20);
+	AppLog("[EMVSetCAPK2Kernel] EMVLoadSpecificCapk=%d\n", iRet);
+#endif	
+	if(iRet == 0)
+	{
+#ifndef _WIN32
+		iRet = EMVAddCAPK(&stEmvCapk);
+#ifdef DEBUG_
+		AppLog("[EMVSetCAPK2Kernel] EMVAddCAPK=%d\n", iRet);
+#endif
+#endif
+	}
+#else
+	// TODO
+#endif
+
+	// Added by ZhangYuan 2016-11-16, add revoked certificate
+#ifndef _WIN32
+	EMVDelAllRevocList();
+#endif
+
+	memset(&stEmvRevocList, 0, sizeof(EMV_REVOCLIST));
+#ifdef EMV_PARAM_TEST_
+	iRet = EMVLoadSpecificRevoke(aucAid, ucCapkKeyIdx, &stEmvRevocList);
+#ifdef DEBUG_
+	AppLog("[EMVSetCAPK2Kernel] EMVLoadSpecificRevoke=%d\n", iRet);
+#endif
+	if(iRet == EMV_OK)
+	{
+#ifndef _WIN32
+		EMVAddRevocList(&stEmvRevocList);
+#endif
+	}
+#endif
+
+	return iRet;
+}
+
+// Added by ZhangYuan 2016-10-17 Load EMV TLV data from file, and set them into the EMV kernel
+void LoadEmvTLVFromFS(void)
+{
+	int iRet=0, i=0, iTagListLen=0, iTagLen=0, iDataLen=0, iLengthLen=0, iOffset=0, iLengthSubsequentByte=0, iCount=0;
+	unsigned short usTag=0;
+	unsigned char aucBuf[4096+1], aucData[256+1];
+
+	memset(aucBuf, 0, sizeof(aucBuf));
+	iRet = GetAllTLVDataFromMem(aucBuf, &iTagListLen);
+#ifdef DEBUG_
+	AppLog("[GetAllTLVDataFromMem] GetAllTLVDataFromFS ret = %d\n", iRet);
+#endif
+
+	if(iRet != EMV_OK)
+	{
+		return;
+	}
+
+	while(iOffset < iTagListLen)
+	{		
+		//calculate tag length, refer to EMV tag Field structure
+		if ( 0x1F == (aucBuf[iOffset] & 0x1F) ) {
+			if ( 0x80 == (aucBuf[iOffset + 1] & 0x80) ) {
+				iTagLen = 3;
+			} else {
+				iTagLen = 2;
+				usTag = aucBuf[iOffset] * 256 + aucBuf[iOffset + 1];
+			}
+		} else {
+			iTagLen = 1;
+			usTag = aucBuf[iOffset];
+		}
+
+		//check length
+		if ( (iOffset + iTagLen) > iTagListLen ) {
+			break;
+		}
+
+		//calculate data length, refer to EMV tag Field structure
+		iDataLen = 0;
+		iLengthSubsequentByte = 0;
+		if ( 0x80 == (aucBuf[iOffset + iTagLen] & 0x80) ) {
+			iLengthSubsequentByte = aucBuf[iOffset + iTagLen] & 0x7F;
+			for ( i = iLengthSubsequentByte - 1; i > 0; i++ ) {
+				iDataLen += aucBuf[iOffset + iTagLen + i] + 256 * iCount;
+				iCount++;
+			}
+		} else {
+			iDataLen = aucBuf[iOffset + iTagLen];
+		}
+
+		//check length
+		iLengthLen = 1 + iLengthSubsequentByte;
+		if ( (iOffset + iTagLen + iLengthLen + iDataLen) > iTagListLen) {
+			break;
+		}
+
+		//get data for EMV and Paywave
+		memset(aucData, 0, sizeof(aucData));
+		memcpy(aucData, aucBuf + iOffset + iTagLen + iLengthLen, iDataLen);
+
+#ifndef _WIN32
+		iRet = EMVSetTLVData(usTag, aucData, iDataLen);
+#endif
+#ifdef DEBUG_
+		AppLog("[LoadEmvTLVFromFS] EMVSetTLVData=%d, iDataLen=%d\n", iRet, iDataLen);
+		AppHexLog("[LoadEmvTLVFromFS] Tag: ", aucBuf + iOffset, iTagLen);
+		AppHexLog("[LoadEmvTLVFromFS] Value: ", aucBuf + iOffset + iTagLen + iLengthLen, iDataLen);
+#endif
+
+		iOffset = iOffset + iTagLen + iLengthLen + iDataLen;
+	}
+}
+// added end LoadEmvTLVFromFile
+
+// ==================== ================================================================
+
+
+// 只处理基本数据元素Tag,不包括结构/模板类的Tag
+// Build basic TLV data, exclude structure/template.
+void BuildTLVString(ushort uiEmvTag, uchar *psData, int iLength, uchar **ppsOutData)
+{
+	uchar	*psTemp;
+
+	if( iLength<0 )
+	{
+		return;
+	}
+
+	// 设置TAG
+	// write tag
+	psTemp = *ppsOutData;
+	if( uiEmvTag & 0xFF00 )
+	{
+		*psTemp++ = (uchar)(uiEmvTag >> 8);
+	}
+	*psTemp++ = (uchar)uiEmvTag;
+
+	// 设置Length
+	// write length
+	if( iLength<=127 )	// 目前数据长度均小余127字节,但仍按标准进行处理
+	{
+		*psTemp++ = (uchar)iLength;
+	}
+	else
+	{	// EMV规定最多255字节的数据
+		*psTemp++ = 0x81;
+		*psTemp++ = (uchar)iLength;
+	}
+
+	// 设置Value
+	// write value
+	if( iLength>0 )
+	{
+		memcpy(psTemp, psData, iLength);
+		psTemp += iLength;
+	}
+
+	*ppsOutData = psTemp;
+}
+
+int ValidCardNo(unsigned char *pucCardNo)
+{
+	uchar	bFlag, ucTemp, ucResult;
+	uchar	*pszTemp;
+
+	if(pucCardNo == NULL || strlen(pucCardNo) == 0)
+	{
+		return -1;
+	}
+
+	// (2121算法)
+	bFlag    = FALSE;
+	pszTemp  = &pucCardNo[strlen((char *)pucCardNo)-1];
+	ucResult = 0;
+	while( pszTemp>=pucCardNo )
+	{
+		ucTemp = (*pszTemp--) & 0x0F;
+		if( bFlag )    ucTemp *= 2;
+		if( ucTemp>9 ) ucTemp -= 9;
+		ucResult = (ucTemp + ucResult) % 10;
+		bFlag = !bFlag;
+	}
+
+	if( ucResult!=0 )
+	{
+#ifndef EUI_
+		ScrCls();
+		PubDispString("INVALID CARD", 4|DISP_LINE_LEFT);
+		PubBeepErr();
+		DelayMs(150);
+#endif	
+		return -1;
+	}
+
+	return 0;
+}
+
+//modified by Kevin Liu 20161107
+int ValidCard()
+{
+	int iRet=0, iTag57Len=0;
+	unsigned char	aucTag57[80+1]={0}, ucPAN[20+1]={0}, ucExpDate[4+1]={0};
+	char	*p=NULL, *pszTemp=NULL;
+
+	memset(aucTag57, 0, sizeof(aucTag57));
+	memset(ucPAN, 0, sizeof(ucPAN));
+
+#ifndef _WIN32
+	iRet = EMVGetTLVData(0x57, aucTag57, &iTag57Len);
+#endif
+#ifdef DEBUG_
+	AppLog("[ValidCard] EMVGetTLVData=%d, Tag: 57, Len: %d\n", iRet, iTag57Len);
+	AppHexLog("[ValidCard] Tag 57, Value: ", aucTag57, iTag57Len);
+#endif
+	if(iRet == EMV_OK)
+	{
+		unsigned char aucTrack2[37+1];
+		unsigned char aucTrack3[107+1];
+		int iLoop=0;
+
+		memset(aucTrack2, 0, sizeof(aucTrack2));
+		memset(aucTrack3, 0, sizeof(aucTrack3));
+		PubBcd2Asc(aucTag57, iTag57Len, aucTrack2);
+
+		//modified by Kevin Liu 20161107
+/*			
+		for (iLoop=0; ; iLoop++)
+		{
+			if ( ('D' == aucTrack2[iLoop]) || (iLoop>=19) )
+				break;
+			aucPan[iLoop] = aucTrack2[iLoop];
+		}
+*/
+		PubTrimTailChars(aucTrack2, 'F');	// erase padded 'F' chars
+		for ( iLoop=0; aucTrack2[iLoop] != '\0'; iLoop++ )		// convert 'D' to '='
+		{
+			if ( aucTrack2[iLoop] == 'D' )
+			{
+				aucTrack2[iLoop] = '=';
+				break;
+			}
+		}
+		
+		GetPanFromTrack(aucTrack2, aucTrack3, ucPAN, ucExpDate);
+		
+	}
+
+	iRet = ValidCardNo(ucPAN);
+
+	//added be kevinliu 20161024
+	memcpy(g_tTransParam.ucPAN, ucPAN, strlen(ucPAN));
+	memcpy(g_tTransParam.ucExpDate, ucExpDate, strlen(ucExpDate));
+	
+	return iRet;
+}
+
+// ==================== Transaction processing ==============================================
+static int EMVInitTransaction()
+{
+	int iRet=0;
+
+	EMVSetPARAM();
+	iRet=EMVLoadAppFromFile();
+
+	return iRet;
+}
+
+// start transaction for EMV chip card
+// from App selection to 1st GAC
+int EMVStartTransaction()
+{
+	int				iRet=0, iLen=0;
+	unsigned char	ucACType=AC_AAC;
+//	unsigned char 	aucAmount[12+1];
+	unsigned char ucTemp[32]={0};
+
+#ifdef DEBUG_
+	AppLog("[EMVStartTransaction] Begin ----------------------------------------------------------------\n");
+	AppLog("[EMVStartTransaction] TransAmount=%d, Cashback=%d, TransNo=%d\n", g_stClssTransParam.ulAmntAuth, g_stClssTransParam.ulAmntOther, g_stClssTransParam.ulTransNo);
+#endif
+	//added by Kevin Liu 20160902
+	memset(ucTemp, 0, sizeof(ucTemp));
+	ucTemp[0] = TRANS_TYPE_EMV_CONTACT;
+	SetConfigurationData(CMD_TXN_CUR_TXN_TYPE, ucTemp, 1);
+
+	EMVInitTransaction();
+
+#ifndef _WIN32
+	iRet = EMVAppSelect(ICC_USER, g_stClssTransParam.ulTransNo);
+#endif
+#ifdef DEBUG_
+	AppLog("[EMVStartTransaction] EMVAppSelect=%d\n", iRet);
+#endif
+	if( iRet==EMV_DATA_ERR || iRet==EMV_NO_APP || iRet==EMV_RSP_ERR || iRet==ICC_RSP_6985 || iRet == ICC_RESET_ERR || iRet==ICC_CMD_ERR) // Add ICC_RESET_ERR   ICC_CMD_ERR
+	{
+		if(g_tAppParam.ucFallbackAllowFlag[0] == APPPARAM_FALLBACK_ALLOW)
+		{
+			g_ucIsFallBack = TRUE;	//added by Kevin Liu 20160902
+			return EL_EMV_RET_FALLBACK;
+		}
+		
+		if(iRet == EMV_DATA_ERR)
+		{
+			return EL_EMV_RET_CARD_DATA_ERR;
+		}
+		else 
+		{
+			return EL_EMV_RET_NO_APP;
+		}
+	}
+	else if( iRet==EMV_TIME_OUT || iRet==EMV_USER_CANCEL )
+	{
+		return EL_EMV_RET_USER_CANCEL;
+	}
+	else if( iRet!=EMV_OK )
+	{
+		return EL_EMV_RET_TRANS_FAIL;
+	}
+
+#ifndef _WIN32
+	iRet = EMVReadAppData();
+#endif
+#ifdef DEBUG_
+	AppLog("[EMVStartTransaction] EMVReadAppData=%d\n", iRet);
+#endif
+	if( iRet==EMV_TIME_OUT || iRet==EMV_USER_CANCEL )
+	{
+		return EL_EMV_RET_USER_CANCEL;
+	}
+	else if( iRet!=EMV_OK )
+	{
+		return EL_EMV_RET_TRANS_FAIL;
+	}
+
+	// valid card number if needed
+	iRet = ValidCard();
+#ifdef DEBUG_
+	AppLog("[EMVStartTransaction] ValidCard=%d\n", iRet);
+#endif
+	if(iRet != 0)
+	{
+		return EL_EMV_RET_CARD_DATA_ERR;
+	}
+
+#ifndef EUI_
+	ScrCls();
+	PubDispString("PROCESSING,WAIT..", 0|DISP_LINE_CENTER);
+#else
+	// TODO
+#endif
+
+	// Added by ZhangYuan 2016-10-17 Load EMV TLV data from file, and set them into the EMV kernel
+	LoadEmvTLVFromFS();
+	// Added end
+
+	EMVSetFinalApp2Kernel();
+
+	EMVSetCAPK2Kernel();
+
+#ifndef _WIN32
+	iRet = EMVCardAuth();
+#endif
+#ifdef DEBUG_
+	AppLog("[EMVStartTransaction] EMVCardAuth=%d\n", iRet);
+#endif
+	if(iRet != EMV_OK)
+	{
+		return EL_EMV_RET_TRANS_FAIL;
+	}
+
+#ifdef DEBUG_
+	{
+		int		tempret=0, errorcode=0;
+		uchar	testassistinfo[512];
+
+		memset(testassistinfo, 0, sizeof(testassistinfo));
+#ifndef _WIN32
+		tempret = EMVGetDebugInfo(512, testassistinfo, &errorcode);
+#endif
+		AppLog("[EMVStartTransaction] EMVGetDebug Info = %d\n", tempret);
+		if(tempret == EMV_OK)
+		{			
+			AppLog("[EMVStartTransaction] L2 error code = %d\n", errorcode);
+		}
+	}
+#endif
+
+#ifndef _WIN32
+	EMVSetPCIModeParam(1, (uchar *)"0,4,5,6,7,8,9,10,11,12", 120000);
+
+#ifdef DEBUG_
+	AppLog("[EMVStartTransaction] before EMVStartTrans TransAmount=%d, Cashback=%d, TransNo=%d\n", g_stClssTransParam.ulAmntAuth, g_stClssTransParam.ulAmntOther, g_stClssTransParam.ulTransNo);
+#endif
+	iRet = EMVStartTrans(g_stClssTransParam.ulAmntAuth, g_stClssTransParam.ulAmntOther, &ucACType);
+#endif
+#ifdef DEBUG_
+	AppLog("[EMVStartTransaction] EMVStartTrans=%d, TransAmount=%ld, Cashback=%ld, ACType=%02x\n", iRet, g_stClssTransParam.ulAmntAuth, g_stClssTransParam.ulAmntOther, ucACType);
+	{
+		int iTmpLen=0;
+		unsigned char aucTmp[64];
+
+		memset(aucTmp, 0, sizeof(aucTmp));
+#ifndef _WIN32
+		EMVGetTLVData(0x95, aucTmp, &iTmpLen);
+		AppHexLog("[EMVStartTransaction] Tag: 95, Value: ", aucTmp, iTmpLen);
+
+		memset(aucTmp, 0, sizeof(aucTmp));
+		EMVGetTLVData(0x9B, aucTmp, &iTmpLen);
+		AppHexLog("[EMVStartTransaction] Tag: 9B, Value: ", aucTmp, iTmpLen);
+
+		memset(aucTmp, 0, sizeof(aucTmp));
+		EMVGetTLVData(0x9F34, aucTmp, &iTmpLen);
+		AppHexLog("[EMVStartTransaction] Tag: 9F34, Value: ", aucTmp, iTmpLen);
+#endif
+	}
+#endif
+	if(iRet != EMV_OK)
+	{
+		if(iRet == EMV_DENIAL || iRet == EMV_NOT_ACCEPT )
+		{
+			return EL_EMV_RET_TRANS_DENIAL;
+		}
+		else
+		{
+			return EL_EMV_RET_TRANS_FAIL;
+		}
+	}
+
+	// ACType processing
+	if(ucACType == AC_AAC)
+	{
+		iRet = EL_EMV_RET_TRANS_DECLINED;
+	}
+//	else if(ucACType == AC_ARQC)
+//	{
+//		iRet = EL_EMV_RET_TRANS_REQUEST_GO_ONLINE;
+//	}
+	//else
+	//{
+	//	// TC
+	//	iRet = EL_EMV_RET_TRANS_APPROVE;
+	//}
+
+	return iRet;
+}
+
+int EMVCompleteTransaction()
+{
+	int				iRet=0, iLen=0, iIssuerScriptLen=0;
+	unsigned char	aucIssuerScript[1024+1], aucScript[512+1], *pucTmp, ucACType=AC_AAC;
+
+#ifdef DEBUG_
+	AppLog("[EMVCompleteTransaction] Begin ------------\n");
+#endif
+
+	pucTmp = aucIssuerScript;
+
+	// Set 71, 72 to kernel
+	memset(aucIssuerScript, 0, sizeof(aucIssuerScript));
+	memset(aucScript, 0, sizeof(aucScript));
+	iLen = 0;
+#ifndef _WIN32
+	EMVGetTLVData(0x71, aucScript, &iLen);
+#endif
+	if(iLen > 0)
+	{
+		BuildTLVString(0x71, aucScript, iLen, &pucTmp);
+		iIssuerScriptLen += iLen;
+#ifdef DEBUG_
+		AppHexLog("[EMVCompleteTransaction] Issuer script, 0x71: ", aucIssuerScript, iIssuerScriptLen);
+#endif
+	}	
+
+	iLen = 0;
+#ifndef _WIN32
+	EMVGetTLVData(0x72, aucScript, &iLen);
+#endif
+	if(iLen > 0)
+	{
+		BuildTLVString(0x72, aucScript, iLen, &pucTmp);
+		iIssuerScriptLen += iLen;
+#ifdef DEBUG_
+		AppHexLog("[EMVCompleteTransaction] Issuer script, 0x72: ", aucIssuerScript, iIssuerScriptLen);
+#endif
+	}	
+
+#ifndef _WIN32
+	iRet = EMVCompleteTrans(g_tTransParam.ucOnlineResult[0], aucIssuerScript, &iIssuerScriptLen, &ucACType);
+#endif
+#ifdef DEBUG_
+	AppLog("[EMVCompleteTransaction] EMVCompleteTrans=%d, ucACType=%02x ", iRet, ucACType);
+#endif
+	if(iRet != EMV_OK)
+	{
+		if(iRet == EMV_DENIAL || iRet == EMV_NOT_ACCEPT )
+		{
+			return EL_EMV_RET_TRANS_DENIAL;
+		}
+		else
+		{
+			return EL_EMV_RET_TRANS_FAIL;
+		}
+	}
+
+	if(ucACType == AC_AAC)
+	{
+		return EL_EMV_RET_TRANS_DECLINED;
+	}
+
+	return iRet;
+}

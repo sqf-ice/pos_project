@@ -1,0 +1,13 @@
+emvtest.c:254:5:writeEMVCAPK_MoreVisa	2680	static
+emvtest.c:444:5:writeEMVCAPK	4432	static
+emvtest.c:761:5:WriteTestCAPK	15256	static
+emvtest.c:1866:6:InitEmvParamInfo	0	static
+emvtest.c:1875:6:EMVSetPARAM	872	static
+emvtest.c:1989:5:EMVLoadAppFromFile	1264	static
+emvtest.c:2064:5:EMVLoadSpecificApp	1272	static
+emvtest.c:2141:5:EMVLoadSpecificCapk	320	static
+emvtest.c:2202:5:EMVLoadSpecificRevoke	48	static
+emvtest.c:2241:6:AppLog	1056	static
+emvtest.c:18:5:writeEMVAPP	6848	static
+emvtest.c:2269:6:AppStrLog	1032	static
+emvtest.c:2294:6:AppHexLog	1096	static

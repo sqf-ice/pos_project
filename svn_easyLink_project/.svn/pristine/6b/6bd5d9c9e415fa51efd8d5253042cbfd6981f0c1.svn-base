@@ -1,0 +1,135 @@
+#include "../inc/global.h"
+
+#define DATA_ERROR1  1
+#define DATA_ERROR2  2
+#define DATA_ERROR3  3
+#define DATA_ERROR4  4
+
+struct PAX_PRN
+{
+	unsigned char  count[2];
+	unsigned char  content[128];
+} Pax_prn;
+
+struct PAX_LOGO
+{
+	unsigned char  line;
+	struct PAX_PRN  prn_txt[8];
+} Pax_logo;
+
+void conv_bmp(unsigned char *dest, unsigned char *src, int len, int jplen, unsigned char off)
+{
+	int i, tlen;
+	//the last pix need reversed
+	if (off != 0)
+	{
+		tlen = len - jplen-1;
+	}
+	else
+	{
+		tlen = len - jplen;
+	}
+	for(i=0; i<tlen; i++)
+	{
+		dest[i] = src[i] ^ 0xff;
+	}
+
+	if(off!= 0)
+	{
+		dest[tlen] = src[tlen] ^ (0xff<<(8-off));
+	}
+}
+
+int BmpToUiLogo(unsigned char *filename, unsigned char *gMallocBuffer)
+{
+	int iRet = 0;
+	int fp;
+	unsigned char *bmp = NULL;
+	int LineByte;
+	uint i=0;
+	int iFileLen;
+	int iBmpPixWidth, iBmpWidth, iBmpFillLen ,iBmpPixBitCount,iBmpByteSize;
+	unsigned char ucOff;
+	unsigned short usLeftIndent = 0;
+	int iCnt = 0;
+	uchar ucBmpBuff[1024] = {0};
+	iRet = PdkFile_Exist(filename);
+	ComDebugTx("BmpToUiLogo PdkFile_Exist= %d\n", iRet);
+	if(iRet != 0)
+		return -2;
+
+	fp=PdkFile_Open(filename);
+	ComDebugTx("BmpToUiLogo PdkFile_Open= %d\n", fp);
+	if(fp < 0) {
+		return -1;
+	}
+
+	bmp = ucBmpBuff;
+	LineByte = PdkFile_GetSize(filename);
+	ComDebugTx("BmpToUiLogo PdkFile_GetSize = %d\n", LineByte);
+	if(LineByte < 0){
+		return LineByte;
+	}
+	iRet = PdkFile_Read(fp, ucBmpBuff, LineByte);
+	ComDebugTx("BmpToUiLogo PdkFile_Read = %d\n", iRet);
+	PdkFile_Close(fp);
+
+	if(!(bmp[0x00]=='B' && bmp[0x01]=='M')){
+		return  DATA_ERROR1;
+	}
+
+	iFileLen =  ((int)bmp [0x05])<<24 | ((int)bmp [0x04])<<16 | ((int)bmp [0x03])<<8 |((int)bmp [0x02]);
+	ComDebugTx("BmpToUiLogo  iFileLen = %d\n", iFileLen);
+	iBmpPixWidth = ((int)bmp [0x15]) << 24 |((int)bmp [0x14]) << 16 | ((int)bmp [0x13]) << 8 | ((int)bmp [0x12]);
+	ComDebugTx("BmpToUiLogo  iBmpPixWidth = %d\n", iBmpPixWidth);
+	if(iBmpPixWidth > 128) {
+		return  DATA_ERROR4;
+	}
+	
+	iBmpPixBitCount = ((int)bmp[0x1d]) << 8 | ((int)bmp[0x1c]);
+	ComDebugTx("BmpToUiLogo  iBmpPixBitCount = %d\n",iBmpPixBitCount);
+	if(iBmpPixBitCount != 1) {
+		return DATA_ERROR2;
+	}
+	
+	iBmpByteSize = ((int)bmp[0x25]) << 24 | ((int)bmp[0x24]) << 16 | ((int)bmp[0x23]) << 8 | ((int)bmp[0x22]);
+	ComDebugTx("BmpToUiLogo  iBmpByteSize = %d\n", iBmpByteSize);
+	if(iBmpByteSize > (128*48)) {
+		return DATA_ERROR3;
+	}
+
+
+	ucOff = iBmpPixWidth%8;
+	if(ucOff !=0) {
+		iBmpPixWidth +=8;
+	}
+
+	if(((iBmpPixWidth/8)%4) != 0) {
+		iBmpFillLen = 4-(iBmpPixWidth/8)%4;
+	}
+	else {
+		iBmpFillLen = 0;
+	}
+	iBmpWidth = iBmpPixWidth/8+iBmpFillLen;
+
+	Pax_logo.line = bmp[0x16]/8;
+	ComDebugTx("BmpToUiLogo  Pax_logo.line = %d\n", Pax_logo.line);
+	
+	for(i=0; i<Pax_logo.line; i++) {
+		memset(Pax_logo.prn_txt[i].content, 0, iBmpPixWidth);
+		Pax_logo.prn_txt[i].count[0] = 0;
+		Pax_logo.prn_txt[i].count[1] = iBmpPixWidth;
+		ComDebugTx("BmpToUiLogo  iBmpPixWidth = %d\n", iBmpPixWidth);
+		
+		conv_bmp(Pax_logo.prn_txt[i].content + usLeftIndent, &bmp[iFileLen-(i+1)*iBmpWidth], iBmpWidth, iBmpFillLen, ucOff);
+	}
+	gMallocBuffer[0] = Pax_logo.line;
+
+	for(i= 0;i<Pax_logo.line; i++) {
+		memcpy(&gMallocBuffer[i*(iBmpPixWidth+2)+1], Pax_logo.prn_txt[i].count, 2);
+		memcpy(&gMallocBuffer[i*(iBmpPixWidth+2)+2+1], Pax_logo.prn_txt[i].content, iBmpPixWidth);
+	}
+	
+	AppHexLog("BmpToUiLogo gMallocBuffer : ", gMallocBuffer, iBmpByteSize);
+	return 0;
+}

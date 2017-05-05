@@ -1,0 +1,351 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date: 2016/10/10     
+ * Module Auth: ZhangYuan 
+ * Description:   EMV contactless xml file operarte module
+
+ *      
+ * ============================================================================
+ */
+
+
+#ifndef _CLSS_EMV_FILE_OP_H
+#define _CLSS_EMV_FILE_OP_H
+
+
+
+#define CLSS_XML_FILE_OP_ERR_BASE					-6000
+#define CLSS_XML_FILE_OP_ERR_INVALID_PARAM			CLSS_XML_FILE_OP_ERR_BASE-1
+#define CLSS_XML_FILE_OP_ERR_CLSS_TYPE_NOT_EXIST	CLSS_XML_FILE_OP_ERR_BASE-2
+
+#define CLSS_XML_FILE_OP_ERR_NODE_NOT_EXIST         CLSS_XML_FILE_OP_ERR_BASE-3
+
+#define CLSS_XML_FILE_OP_ERR_FUNCTIONE_NOT_FOUNTD   CLSS_XML_FILE_OP_ERR_BASE-4
+#define CLSS_XML_FILE_OP_ERR_RECORD_NOT_FOUNTD     	CLSS_XML_FILE_OP_ERR_BASE-5
+#define CLSS_XML_FILE_OP_ERR_AID_OVER_FLOW      	CLSS_XML_FILE_OP_ERR_BASE-6
+
+
+
+
+#define CLSS_XML_FILE_OP_RETURN_BASE				6000
+#define CLSS_XML_FILE_OP_NOT_EXIST					CLSS_XML_FILE_OP_RETURN_BASE+1
+#define CLSS_XML_FILE_OP_NOT_FOUND_NODE				CLSS_XML_FILE_OP_RETURN_BASE+2
+#define CLSS_XML_FILE_OP_FOUND_NODE					CLSS_XML_FILE_OP_RETURN_BASE+3
+#define CLSS_XML_FILE_OP_NOT_FOUND_RETURN			CLSS_XML_FILE_OP_RETURN_BASE+4
+
+#define CLSS_XML_FILE_OP_OK                         0
+
+#define CLSS_PRASED_RECORD_MAX_NODE_CNT                   10
+
+
+
+#define CLSS_BUF_READ_SIZE							1024
+#define CLSS_BUF_TMP_READ_SIZE						1356
+#define CLSS_BUF_NODE_VALUE_LEN                		256
+
+#define MAX_TRANSTYPE_NUM   6
+
+
+#define CLSS_XML_FILE_NAME                			"clss_param.clss"
+#define CLSS_XML_FILE_HAVE_PARSED           		"clss_parsed.clss" 
+
+
+#define CLSS_XML_NODE_PAYPASS						"PAYPASSPARAM"
+#define CLSS_XML_NODE_PAYWAVE						"PAYWAVEPARAM"
+#define CLSS_XML_NODE_OTHER							"OTHERCONFIGURATION"
+
+#define XML_ELEMENT_BEGIN_FLAG						0x00
+#define XML_ELEMENT_END_FLAG						0x01
+
+typedef int (*CLSS_PARSE_CB)(const uchar *pucXmlOneLine, void *pucOutData);
+
+typedef struct Clss_Parse
+{
+	int NodeType;
+	CLSS_PARSE_CB ClssParseCb;
+	
+}CLSS_PARSE;
+
+typedef enum {
+	CLSS_PAYPASS = 1,		
+	CLSS_PAYWAVE,		
+	CLSS_COMMON,	
+	
+}CLSS_TYPE;
+
+
+typedef enum{
+	CLSS_PAYPASS_PARAM = 1,
+	CLSS_PAYPASS_AIDLIST,
+	CLSS_PAYPASS_CONFIG,
+	CLSS_PAYPASS_AIDLIST_END,
+
+	CLSS_PAYWAVE_PARAM,
+	CLSS_PAYWAVE_AID,
+	CLSS_PAYWAVE_AID_INTERWARE,
+	CLSS_PAYWAVE_PROGRAM_ID,
+	CLSS_PAYWAVE_TERM_CAPABILITY,
+
+	CLSS_OTHER_CONFIG,
+
+	CLSS_PARAM_END,
+}CLSS_NODE_TYPE;
+
+typedef enum{
+	PAYPASS_PARTIALAIDSELECTION = 10,	// PartialAIDSelection
+	PAYPASS_APPLICATIONID,				// ApplicationID
+	PAYPASS_IFUSELOCALNAME,				// IfUseLocalAIDName
+	PAYPASS_LOACALAIDNAME,				// LocalAIDName
+	PAYPASS_TERMINALAIDVERSION,			// TerminalAIDVersion
+	PAYPASS_MAG_APP_VERSION_NUM,		// MagneticApplicationVersionNumber
+	PAYPASS_TACDENIAL,					// TACDenial
+	PAYPASS_TACONLINE,					// TACOnline
+	PAYPASS_TACDEFAULT,					// TACDefault
+	PAYPASS_TERMINAL_RISK,				// TerminalRisk
+	PAYPASS_CLSS_CVM_LIMIT,				// ContactlessCVMLimit
+	PAYPASS_CLSS_TRANS_LIMIT_NO_ON_DEVICE,	// ContactlessTransactionLimit_NoOnDevice
+	PAYPASS_CLSS_TRANS_LIMIT_ON_DEVICE,		// ContactlessTransactionLimit_OnDevice
+	PAYPASS_CLSS_FLOOR_LIMIT,				// ContactlessFloorLimit
+}PAYPASS_AID_CHILD_NODE;
+
+
+//CAP:Capability
+typedef enum{
+	PAYPASS_KERNEL_CONF = 30,	
+	PAYPASS_TORN_LEFT_TIME,				
+	PAYPASS_MAX_TORN_NUM,				
+	PAYPASS_MAGENTIC_CVM,				
+	PAYPASS_PAYPASS_MAGENTIC_NO_CVM,			
+	PAYPASS_MOBILE_SUPPORT,		
+	PAYPASS_CARD_DATA_INPUT,					
+	PAYPASS_CVM_CAPA_CVM_REQ,					
+	PAYPASS_CVM_CAPA_NO_CVM_REQ,					
+	PAYPASS_TERMINAL_TYPE,				
+	PAYPASS_ACCOUNT_TYPE,				
+	PAYPASS_ADDITION_TEEM_CAP,	
+	PAYPASS_KERNEL_ID,		
+	PAYPASS_SECURITY_CAPALILITY,			
+}PAYPASS_CONF_CHILD_NODE;
+
+
+typedef enum{
+	PAYWAVE_PARTIALAIDSELECTION = 50,	
+	PAYWAVE_APPLICATIONID,				
+	PAYWAVE_IFUSELOCALNAME,				
+	PAYWAVE_LOACALAIDNAME,				
+	PAYWAVE_TERMINALAIDVERSION,			
+	PAYWAVE_CRY_VER17_SUPPORT,		
+	PAYWAVE_ZERO_AMT_NO_ALLOW,					
+	PAYWAVE_STATUS_CHECKSUPPORT,					
+	PAYWAVE_READER_TTQ,	
+	PAYWAVE_INTERWARELIST_START,
+	PAYWAVE_INTERWARELIST_END,
+	PAYWAVE_INTER_WARE_NODE_START,
+	PAYWAVE_INTER_WARE_NODE_END ,
+}PAYWAVE_AID_CHILD_NODE;
+
+typedef enum{
+	PAYWAVE_TRANS_TYPE = 70,	
+	PAYWAVE_TERM_FLOOR_LIMIT,				
+	PAYWAVE_CLSS_CVM_LIMIT,				
+	PAYWAVE_CLSS_TRANS_LIMIT,				
+	PAYWAVE_CLSS_FLOOR_LIMIT,			
+	PAYWAVE_TERM_FLOOR_LIMINT_SUPPORT,		
+	PAYWAVE_CLSS_TRANS_LIMIT_SUPPORT,					
+	PAYWAVE_CVM_LIMIT_SUPPORT,					
+	PAYWAVE_CLSS_FLOOR_LIMIT_SUPPORT,
+}PAYWAVE_INTERWARE_CHILD_NODE;
+
+
+typedef enum{
+	PAYWAVE_PROGRAM_ID = 90,	
+	PAYWAVE_PROGRAM_ID_TERM_FLOOR_LIMIT,				
+	PAYWAVE_PROGRAM_ID_CLSS_CVM_LIMIT,				
+	PAYWAVE_PROGRAM_ID_CLSS_TRANS_LIMIT,
+	PAYWAVE_PROGRAM_ID_CLSS_FLOOR_LIMIT,
+	PAYWAVE_PROGRAM_ID_TERM_FLOOR_LIMIT_SUPPORT,
+	PAYWAVE_PROGRAM_ID_CLSS_TRANS_LIMIT_SUPPORT,
+	PAYWAVE_PROGRAM_ID_CVM_LIMIT_SUPPORT,
+	PAYWAVE_PROGRAM_ID_CLSS_FLOOR_LIMIT_SUPPORT,
+	PAYWAVE_PROGRAM_ID_CRYPTO_VERSION_17_SUPPORT,
+	PAYWAVE_PROGRAM_ID_ZERO_AMOUNT_NO_ALLOWED,
+	PAYWAVE_PROGRAM_ID_STATUS_CHECK_SUPPORT,
+	PAYWAVE_PROGRAM_ID_READER_TTQ,
+}PAYWAVE_PROGRAM_ID_CHILD_NODE;
+
+
+typedef enum{
+	PAYWAVE_TERM_CAP_TERM_TYPE = 110,	
+	PAYWAVE_TERM_CAP_CARD_DATA_INPUT,				
+	PAYWAVE_TERM_CAP_CVM_SUPPORT,				
+	PAYWAVE_TERM_CAP_OFF_DATA_AUTH,
+	PAYWAVE_TERM_CAP_TRANS_TYPE_CAPA,
+	PAYWAVE_TERM_CAP_TERM_INPUT,
+	PAYWAVE_TERM_CAP_TERM_OUTPUT,
+}PAYWAVE_TERM_CAP_CHILD_NODE;
+
+typedef enum{
+	CLSS_OHTER_COUNTRY_CODE = 110,	
+	CLSS_OHTER_CURRENCY_CODE,				
+	CLSS_OHTER_REF_CURRENCY_CODE,				
+	CLSS_OHTER_CURRENCY_EXP,
+	CLSS_OHTER_REF_CUR_EXP,
+	CLSS_OHTER_REF_CUR_CONVER_RATE,
+	CLSS_OHTER_MER_CAT_CODE,
+	CLSS_OHTER_MERCHANT_ID,
+	CLSS_OHTER_TERMINAL_ID,
+	CLSS_OHTER_MERCHANT_NAME,
+	CLSS_OHTER_MERCHANT_LOCAL_ADDR,
+}CLSS_OTHER_CONF_CHILD_NODE;
+
+
+
+typedef enum {
+	KERNEL_CONFIG = 1,			// KernelConfiguration
+	TORN_LEFT_TIME,				// TornLeftTime
+	MAX_TORN_NUM,				// MaximumTornNumber
+	MAG_CVM,					// MagneticCVM
+	MAG_NO_CVM,					// MagneticNoCVM
+	MOBILE_SUPPORT,				// MobileSupport
+	CARD_DATA_INPUT,			// CardDataInput
+	CVM_CAPABILITY_CVM_REQUIRED,	// CVMCapability_CVMRequired
+	CVM_CAPABILITY_NO_CVM_REQUIRED,	// CVMCapability_NoCVMRequired
+	TERMINAL_TYPE,					// TerminalType
+	ACCOUNT_TYPE,					// AccoutType
+	ADDITIONAL_TERMINAL_CAPABILITY,	// AdditionalTerminalCapability
+	KERNEL_ID,						// KernelID
+	SECURITY_CAPABILITY,			// SecurityCapability
+}PAYPASS_CONFIG_CHILD_NODE;
+
+
+typedef struct PayPassAidNode
+{
+	uchar ucSelFlag;
+	uchar aucAID[17];
+	uchar ucIfUseLocalName;
+	uchar aucAppName[33]; 
+	uchar aucVersion[3];
+	uchar aucMagAppVersion[2];
+	uchar aucTACDenial[5];
+	uchar aucTACOnline[5]; 	 
+	uchar aucTACDefault[5];
+	ulong ulClssFloorLimit;
+	uchar aucTermRisk[8]; 
+	uchar aucTxnLmt_NoOnDevice[6];
+	uchar aucTxnLmt_OnDevice[6];
+	uchar aucRDCVMLmt[6];
+	
+}PAYPASS_AID_NODE_T;
+
+typedef struct PayPassConf
+{
+	uchar ucKernelConf;
+	uchar ucTornLeftTime;
+	uchar ucMaximumTornNumber;
+	uchar ucMagneticCVM; 
+	uchar ucMageticNoCVM;
+	uchar ucMobileSupport;
+	uchar ucCardDataInput;
+	uchar ucCVMCapability_CVMRequired;
+	uchar ucCVMCapability_NoCVMRequired;
+	uchar ucTerminalType;
+	uchar ucAccoutType;
+	uchar aucAdditionalTerminalCapability[5];
+	uchar ucKernelID;
+	uchar ucSecurityCapability;
+}PAYPASS_CONF_T;
+
+
+typedef struct{
+	uchar      ucTransType;//
+	uchar      ucTermFLmtFlg;
+	uchar      ucRdClssTxnLmtFlg;
+	uchar      ucRdCVMLmtFlg;
+	uchar      ucRdClssFLmtFlg;
+	uint 	   ulTermFLmt; 		
+	uint 	   ulcRdClssTxnLmt;  	
+	uint 	   ulRdCVMLmt;    	
+	uint 	   ulRdClssFLmt;	
+}PAYWAVE_INTER_WARE_NODE_T;//Inter_WareFlmtByTransType;
+
+
+typedef struct{
+	uchar    aucAID[17];
+	uchar    ucSelectFlag;
+	uchar 	 ucIfUseLocalName;
+	uchar 	 aucAppName[16+1];
+	uchar    aucAppVersion[2];
+	uchar    ucCrypto17Flg;
+	uchar    ucZeroAmtNoAllowed;
+	uchar    ucStatusCheckFlg;
+	uchar    aucReaderTTQ[5];
+	PAYWAVE_INTER_WARE_NODE_T stFlmtByTransType[MAX_TRANSTYPE_NUM];
+}PAYWAVE_AID_NODE_T;
+
+typedef struct{
+	uchar    aucProgramId[17];
+	uint     ulTerminalFloorLimit;
+	uint 	 ulContactlessCVMLimit;
+	uint 	 ulContactlessTransactionLimit;
+	uint     ulContactlessFloorLimit;
+	uchar    ucTerminalFloorLimitSupported;
+	uchar    ucContactlessTransactionLimitSupported;
+	uchar    ucCVMLimitSupported;
+	uchar    ucContactlessFloorLimitSupported;
+	uchar 	 ucCryptogramVersion17Supported;
+	uchar 	 ucZeroAmountNoAllowed;
+	uchar    ucStatusCheckSupported;
+	uchar    aucReaderTTQ[5];
+	
+}PAYWAVE_PROGREAM_ID_NODE_T;
+
+
+typedef struct{ 
+	uchar    ucTermType;
+	uchar    ucCardDataInput;
+	uchar    ucCVMSupport;
+	uchar    ucOffDataAuth;
+	uchar 	 ucTransTypeCapa;
+	uchar 	 ucTermInput;
+	uchar    ucTermOutput; 	
+}PAYWAVE_TERM_CAPABILITY_NODE_T;
+
+typedef struct{ 
+	uchar    auccountryCode[2];
+	uchar    aucCurrencyCode[2];
+	uchar    aucRefCurrenCyCode[2];
+	uchar    ucCurrencyExponent;
+	uchar 	 ucRefCurrencyExponent;
+	uchar 	 aucRefCurrenceConVerRate[2];
+	uchar    aucMerchantCateCode[2];
+	uchar    aucMerchantId[32];
+	uchar    aucTerminalId[32];
+	uchar    aucMerChantName[32];
+	uchar    aucMerChantLocalAddr[32];
+}CLSS_OTHER_CONF_NODE_T;
+
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+int ParseClssFile(const uchar *pucFileName);
+
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#pragma pack()
+
+
+
+#endif
+

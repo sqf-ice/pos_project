@@ -1,0 +1,350 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date:2016/08/09     
+ * Module Auth:huangwp     
+ * Description:xmlparse module
+
+ *      
+ * ============================================================================
+ */
+
+#include "..\inc\global.h"
+
+uchar AidNode[][32] = {
+		"PartialAIDSelection",
+		"ApplicationID",
+		"IfUseLocalAIDName",
+		"LocalAIDName",
+		"TerminalAIDVersion",
+		"TACDenial",
+		"TACOnline",
+		"TACDefault",
+		"FloorLimit",
+		"Threshold",
+		"TargetPercentage",
+		"MaxTargetPercentage",
+		"TerminalDefaultTDOL",
+		"TerminalDefaultDDOL",
+		"TerminalRiskManagementData",
+		"IsUSDDA",
+};
+
+uchar UiNode[][32] = {
+		"TextBox",
+		"PictureBox",
+		"InputBoxTextBox",
+		"Menu",
+		"TextBox"
+};
+
+
+static int FinNodeEnd(const uchar *NodeName)
+{
+	return 0;
+}
+
+int EmvParaEndTag(const uchar *Buf)
+{
+    char *EmvParaTag = "";
+	return 0;
+}
+
+
+int IsXmlLineHaveAttr(const uchar *pucXmlOneLine )
+{
+	uchar *pucEndTag = NULL;
+	uchar *pucStart = NULL;
+	uchar *pucEnd = NULL;
+	uchar *Attr = NULL;
+
+	if(pucXmlOneLine == NULL)
+	{
+		return XML_ERR_INVALID_PARAM;
+	}
+	
+	pucEndTag = strstr(pucXmlOneLine, "</");
+	pucStart = strchr(pucXmlOneLine, '<');
+    pucEnd =  strchr(pucXmlOneLine, '>');
+
+	if(pucEndTag == NULL || pucStart == NULL || pucEnd == NULL)
+	{
+		return XML_ERR_FROMAT_ERR;
+	}
+	Attr = strchr(pucXmlOneLine, ' ');
+
+	if(pucEndTag == NULL)
+	{
+		if(Attr != NULL)
+		{
+            return XML_NODE_HAVE_ATTR;
+		}
+		return XML_NODE_NO_ATTR;
+	}
+	else if(pucStart == pucEndTag)
+	{
+	 return XML_NODE_END;	
+	}
+    else
+    {
+        return XML_ERR_FROMAT_ERR;
+    }
+}
+
+
+static int ParseXml(const uchar *pucXmlOneLine, XmlNode *Xml, uchar *pucOutValue)
+{
+     uchar *pucStart = NULL;
+	 uchar *pucEnd = NULL;
+	 int iRet = -1;
+
+	if(pucXmlOneLine == NULL || Xml == NULL)
+	{
+		return XML_ERR_INVALID_PARAM;
+	}
+ 
+	 pucStart = strchr(pucXmlOneLine, '<');
+     pucEnd =  strchr(pucXmlOneLine, '>');
+	 #ifdef XML_DEBUG
+	 ComDebugTx("ParseXml----begin to parse\n");
+	 #endif
+	 if(Xml->GetAttrFunc != NULL)
+	 {   
+	 	  #ifdef XML_DEBUG
+		  ComDebugTx("ParseXml----Attr is not NULL\n");
+		  #endif
+		  //memset(AttrValue, 0, sizeof(AttrValue));
+		  iRet = Xml->GetAttrFunc(pucXmlOneLine, Xml->AttrName, pucOutValue);
+		  if(iRet != XML_PARSE_OK)
+		  {
+		      return iRet;
+		  }
+		  #ifdef XML_DEBUG
+		  ComDebugTx("ParseXml ----Attr name = %s   Attr valude = %s\n", Xml->AttrName, pucOutValue);
+		  #endif
+	 }
+	 else
+	 {
+	 	  #ifdef XML_DEBUG
+		  ComDebugTx("ParseXml----Attr is  NULL\n");
+		  #endif
+		  //memset(NodeValue, 0, sizeof(NodeValue));
+		  iRet = Xml->GetValueFunc(pucXmlOneLine, Xml->NodeName, pucOutValue);
+		  if(iRet != XML_PARSE_OK)
+		  {
+		      return iRet;
+		  }
+		  #ifdef XML_DEBUG
+		  ComDebugTx("ParseXml----Node Name = %s  NodeValue valude = %s\n", Xml->NodeName, pucOutValue);
+		  #endif
+	 }
+	 
+	 return XML_PARSE_OK;
+	 	
+}
+
+
+static int GetXmlAttrValue(const uchar *pucXmlOneLine, const uchar *pucAttrName, uchar *pucOutValue)
+{
+	uchar *pucStart = NULL;
+    uchar *pucEndOne = NULL;
+    uchar *pucEndTwo = NULL;
+    uchar *pucEnd = NULL;
+    int iLen = 0;
+    uchar ucTemp[128] = {0};
+
+    if(pucXmlOneLine == NULL || pucAttrName == NULL)
+    {
+	    return XML_ERR_INVALID_PARAM;
+    }
+   
+    strcat(ucTemp,pucAttrName);
+    strcat(ucTemp, "=\"");
+   	
+    pucStart =  strstr(pucXmlOneLine,ucTemp);
+    if(pucStart == NULL)
+    {
+    	#ifdef XML_DEBUG
+        ComDebugTx("GetXmlAttrValue----no this attr in this line\n");
+		#endif
+	    return XML_ERR_ATTR_NULL;
+	   
+    }
+	#ifdef XML_DEBUG
+    ComDebugTx("GetXmlAttrValue---start = %s\n", pucStart);
+	#endif
+   
+    iLen = strlen(pucAttrName);
+   
+    pucEndOne = strchr(pucStart, ' ');
+    if(pucEndOne == NULL)
+    {   
+    	#ifdef XML_DEBUG
+        ComDebugTx("GetXmlAttrValue----EndOne is NULL-------------------\n");
+		#endif
+	    pucEndTwo = strchr(pucStart, '>');
+	    if(pucEndTwo == NULL)
+        {
+            #ifdef XML_DEBUG
+      	    ComDebugTx("GetXmlAttrValue----ENDtwo in NULL-------------------\n");
+			#endif
+		    return XML_ERR_FROMAT_ERR;
+   	    }
+  	    else
+  	    {
+  	        #ifdef XML_DEBUG
+  	        ComDebugTx("EndTwo=%s\n", pucEndTwo);
+			#endif
+		    pucEnd = pucEndTwo;
+   	    }
+    }
+    else
+    {
+    	#ifdef XML_DEBUG
+        ComDebugTx("pucEndOne=%s\n", pucEndOne);
+		#endif
+	    pucEnd = pucEndOne;
+    }
+	
+    memcpy(pucOutValue,pucStart+iLen+2,pucEnd-pucStart-iLen-3);
+	#ifdef XML_DEBUG
+    ComDebugTx("GetXmlAttrValue----pucOutValue = %s \n", pucOutValue);
+	#endif
+    return XML_PARSE_OK;
+}
+
+
+static int GetXmlNodeValue(const uchar *pucXmlOneLine, const uchar *pucNodeName, uchar *pucOutValue)
+{
+	uchar *pucStart = NULL;
+	uchar *pucEnd = NULL;
+
+    if(pucXmlOneLine == NULL || pucNodeName == NULL)
+	{
+		return XML_ERR_INVALID_PARAM;
+	}
+
+    if(strstr(pucXmlOneLine, pucNodeName) == NULL)
+    {
+       #ifdef XML_DEBUG
+       ComDebugTx("GetXmlNodeValue----no this node in this line\n");
+	   #endif
+	   return XML_ERR_NODE_NOT_FOUND;
+    }
+	
+	pucStart = strchr(pucXmlOneLine, '>');
+	if(pucStart == NULL)
+	{
+		#ifdef XML_DEBUG
+	    ComDebugTx("GetXmlNodeValue----pucStart is NULL\n");
+		#endif
+		return XML_ERR_FROMAT_ERR;
+	}
+	
+	pucEnd = strstr(pucXmlOneLine, "</");
+	if(pucEnd == NULL)
+	{
+		#ifdef XML_DEBUG
+		ComDebugTx("GetXmlNodeValue----pucEnd is NULL\n");
+		#endif
+		return XML_ERR_FROMAT_ERR;
+	}
+	
+	memcpy(pucOutValue, pucStart+1, pucEnd-pucStart-1);
+	#ifdef XML_DEBUG
+    ComDebugTx("GetXmlNodeValue----pucOutValue = %s \n", pucOutValue);
+	#endif
+	return XML_PARSE_OK;
+
+}
+
+int XmlParseGetNodeValue(const uchar *pucXmlOneLine, uchar *pucNodeName, uchar *pucOutValue)
+{
+	XmlNode Xml = {0};
+    int iLen = 0;
+	int iRet = 0;
+
+	if(pucXmlOneLine == NULL || pucNodeName == NULL)
+	{
+		return XML_ERR_INVALID_PARAM;
+	}
+	iLen = strlen(pucXmlOneLine);
+	#ifdef XML_DEBUG
+	ComDebugTx("XmlParseGetAttrValue----strlen(pucXmlOneLine) Len = %d \n", iLen);
+	#endif
+	strcpy(Xml.NodeName, pucNodeName);
+	Xml.GetValueFunc = GetXmlNodeValue;
+	Xml.GetAttrFunc = NULL;
+    iRet = ParseXml(pucXmlOneLine, &Xml, pucOutValue);
+	if(iRet != XML_PARSE_OK)
+	{
+		return iRet;
+	}
+	return XML_PARSE_OK;
+}
+
+
+int XmlParseGetAttrValue(const uchar *pucXmlOneLine, uchar *pucAttrName, uchar *pucOutValue)
+{
+	//uchar ucBuffer[512] = {0};
+	XmlNode Xml;
+	int iRet = 0;
+
+	if(pucXmlOneLine == NULL || pucAttrName == NULL)
+	{
+		return XML_ERR_INVALID_PARAM;
+	}
+	
+    memset(&Xml, 0, sizeof(Xml));
+	//strcpy(ucBuffer, pucXmlOneLine);
+	strcpy(Xml.AttrName, pucAttrName);
+	//ComDebugTx("XmlParseGetAttrValue----buffer = %s \n", Buffer);
+	//ComDebugTx("XmlParseGetAttrValue Xml.AttrName = %s \n", Attr);
+	Xml.GetAttrFunc = GetXmlAttrValue;
+	Xml.GetValueFunc = NULL;
+	iRet = ParseXml(pucXmlOneLine, &Xml, pucOutValue);
+	if(iRet != XML_PARSE_OK)
+	{
+		return iRet;
+	}
+	
+	return XML_PARSE_OK;
+}
+
+int XmlGetOneLineData(const uchar *pucBufIn, int *OutLen, char *pucOutOneLineData)
+{
+    uchar *pucFirstTag = NULL;
+	int Length = 0;
+
+	if(NULL == pucBufIn)
+	{
+	    return XML_ERR_INVALID_PARAM;
+	}
+	pucFirstTag = strstr(pucBufIn, "\r\n");
+	if(pucFirstTag == NULL)
+	{
+		return XML_LINE_END_TAG_NULL;
+	}
+	#ifdef XML_DEBUG
+	ComDebugTx("XmlGetOneLineData  pucFirstTag = %s\n", pucFirstTag);
+	#endif
+	
+	Length = pucFirstTag - pucBufIn;
+	*OutLen = Length;
+	#ifdef XML_DEBUG
+	ComDebugTx("XmlGetOneLineData Lenth = %d\n", Length);
+	#endif
+	memcpy(pucOutOneLineData,pucBufIn, Length);
+	#ifdef XML_DEBUG
+	ComDebugTx("XmlGetOneLineData pucOutOneLineData = %s\n", pucOutOneLineData);
+	#endif
+	return UI_XML_FILE_OP_OK;
+	
+}
+
+

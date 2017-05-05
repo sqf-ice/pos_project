@@ -1,0 +1,272 @@
+//============================================================================
+// Name        : filedownload.c
+// Author      :tuxq
+// Version     :
+// Copyright   : Your copyright notice
+// Description : Ansi-style
+//============================================================================
+#include "..\inc\global.h"
+//#define  FILEDOWNLOAD_DEBUG
+//extern int g_count;
+static void sv_ReadFile(SFileInfo stTaskInfo)
+{
+	int iRet=0, iFd=0, iFileSize=0, iOffset=0, iReadLen=0;
+	unsigned char aucBuff[800+1];
+
+	iFd = PdkFile_Open((char *)stTaskInfo.ucFileName);
+	AppLog("[sv_ReadFile] PdkFile_Open=%d, FileName=%s\n", iFd, stTaskInfo.ucFileName);
+	if(iFd < 0)
+	{
+		return;
+	}
+
+	iFileSize = PdkFile_GetSize((char *)stTaskInfo.ucFileName);
+	AppLog("[sv_ReadFile] PdkFile_GetSize=%d, iFileSize=%d, iReadLen=%d\n", iRet, iFileSize);
+	while(iOffset < iFileSize)
+	{
+		if(iFileSize - iOffset > 800)
+		{
+			iReadLen = 800;
+		}
+		else
+		{
+			iReadLen = iFileSize - iOffset;
+		}
+
+		memset(aucBuff, 0, sizeof(aucBuff));
+		iRet = PdkFile_Read(iFd, aucBuff, iReadLen);
+		if(iRet < 0)
+		{
+			AppLog("[sv_ReadFile] PdkFile_Read=%d, iOffset=%d, iReadLen=%d\n", iRet, iOffset, iReadLen);
+			PdkFile_Close(iFd);
+			return;
+		}
+
+		AppStrLog("%s", aucBuff);
+
+		iOffset += iRet;
+	}
+
+	PdkFile_Close(iFd);
+}
+
+static int DeleteFile(unsigned char *pucFileName)
+{
+	int iRet=0;
+
+	iRet = PdkFile_Remove((char *)pucFileName);
+#ifdef MPOS_PROTIMS_DEBUG
+	AppLog("[sn_DeleteParamFile] PdkFile_Remove=%d, pucFileName=%s\n", iRet, pucFileName);
+#endif
+	return iRet;
+}
+
+static ushort GetFileType(const char *pszFileName)
+{
+	if(strstr(pszFileName, ".ui") != NULL)
+	{
+		return PARA_FILE;
+	}
+	else if(strstr(pszFileName, ".emv") != NULL)
+	{
+		return PARA_FILE;
+	}
+	else if(strstr(pszFileName, ".clss") != NULL)
+	{
+		return PARA_FILE;
+	}
+	else if(strstr(pszFileName, ".bmp") != NULL)
+	{
+		return PARA_FILE;
+	}
+	else if(strstr(pszFileName, ".lng") != NULL)
+	{
+		return PARA_FILE;
+	}
+	else if(strstr(pszFileName, ".bin") != NULL)
+	{
+		return MONITOR_FILE;
+	}
+	else if(strstr(pszFileName, ".aip") != NULL)
+	{
+		return PROLIN_APP_FILE;
+	}
+	else if(strstr(pszFileName, ".font") != NULL)
+	{
+		return FONT_FILE;
+	}
+	else if(strstr(pszFileName, ".os") != NULL)
+	{
+		return PROLIN_OS_FILE;
+	}
+	return PARA_FILE;
+}
+
+static int UpdateFirmware(const uchar ucTaskType, const REMOTE_LOAD_STEP eRemoteLoadStep, const uchar *pucData, uint uiDataLen)
+{
+	int iRet=0;
+	uchar ucObject = 0x00;
+
+	switch(ucTaskType)
+	{
+		case MONITOR_FILE:		 			
+			ucObject = 0x00;
+			break;
+
+		case FONT_FILE: 
+			ucObject = 0x01;
+			break;
+
+		default:
+			return -1;
+	}
+
+	iRet = RemoteLoad(ucObject, eRemoteLoadStep, (uchar *)pucData, uiDataLen);
+
+	if(iRet != 0)
+	{
+		return iRet;
+	}
+	
+	return 0;
+}
+
+static int UpdateParamFile(const SFileInfo sFileInfo){
+	int iFd = 0, iRet = 0;
+	uint uiCurFileSize = 0;
+	//if file not exist,create one;if exist,open it
+	iFd = PdkFile_Open ((char*)sFileInfo.ucFileName);
+//	AppLog("UpdateParamFile  PdkFile_Open iFd = %d\n",iFd);
+	if(iFd < 0){
+		AppLog("UpdateParamFile  PdkFile_Open iFd = %d\n",iFd);
+		return iFd;
+	//	return FILEDOWNLOAD_ERR_OPENFAILED;
+	}
+//  get current file size
+//	uiCurFileSize = PdkFile_GetSize((char*)sFileInfo.ucFileName);
+#ifdef FILEDOWNLOAD_DEBUG
+	AppLog("UpdateParamFile  PdkFile_GetSize uiCurFileSize = %d\n",uiCurFileSize);
+	AppLog("UpdateParamFile  PdkFile_GetSize sFileInfo.uiCurFileSize = %d\n",sFileInfo.uiCurFileSize);
+	AppLog("UpdateParamFile  PdkFile_GetSize sFileInfo.uiFileSize = %d\n",sFileInfo.uiFileSize);
+	AppLog("UpdateParamFile  PdkFile_GetSize sFileInfo.ucFileName = %s\n",sFileInfo.ucFileName);
+#endif
+	iRet = PdkFile_Seek (iFd, sFileInfo.uiFileOffset, SEEK_SET);//relocate file
+	if(iRet < 0)
+	{
+		PdkFile_Close(iFd);
+		return iRet;
+	}
+//	AppLog("UpdateParamFile  PdkFile_Seek iRet = %d\n",iRet);
+	iRet = PdkFile_Write (iFd, sFileInfo.ucFileContent, sFileInfo.uiCurFileSize);//byte
+//	AppLog("UpdateParamFile  PdkFile_Write iRet = %d\n",iRet);
+	if(iRet < 0){
+		PdkFile_Close(iFd);
+		return iRet;
+	}
+	iRet = PdkFile_Close(iFd);
+	if(iRet < 0)
+	{
+		return iRet;
+	}
+
+	return 0;
+}
+
+int  DownloadFile(const uchar * pucRequest)
+{
+	int iRet = 0,iFd = 0;
+	SFileInfo sFileInfo;
+	ushort usFileType = 0;
+	uint uiReqOffset = 0, uiLength = 0, uiCurFileSize = 0, uiFileOffset = 0;
+	REMOTE_LOAD_STEP eDownLoadStep = REMOTE_LOAD_BEGIN;
+	memset(&sFileInfo, 0, sizeof(SFileInfo));
+
+	uiLength = (uint)pucRequest[0]<<8 | pucRequest[1];
+//	AppLog("DownloadFile uiLength = %d\n",uiLength);
+
+	uiReqOffset += 2;
+	memcpy(sFileInfo.ucFileName, pucRequest + uiReqOffset, uiLength);
+	uiReqOffset +=  uiLength;
+	sFileInfo.uiFileSize = (uint)pucRequest[uiReqOffset]<<24 | (uint)pucRequest[uiReqOffset+1]<<16 | (uint)pucRequest[uiReqOffset+2]<<8 |(uint)pucRequest[uiReqOffset+3];
+	uiReqOffset += sizeof(uint);
+	sFileInfo.uiFileOffset = (uint)pucRequest[uiReqOffset]<<24 | (uint)pucRequest[uiReqOffset+1]<<16 | (uint)pucRequest[uiReqOffset+2]<<8 |(uint)pucRequest[uiReqOffset+3];
+	uiReqOffset += sizeof(uint);
+	sFileInfo.uiCurFileSize = (uint)pucRequest[uiReqOffset]<<24 | (uint)pucRequest[uiReqOffset+1]<<16 | (uint)pucRequest[uiReqOffset+2]<<8 |(uint)pucRequest[uiReqOffset+3];
+	uiReqOffset += sizeof(uint);
+
+//	AppLog("DownloadFile  sFileInfo.ucFileName = %s\n",sFileInfo.ucFileName);
+//	AppLog("DownloadFile sFileInfo.uiFileSize = %d\n",sFileInfo.uiFileSize);
+//	AppLog("DownloadFile sFileInfo.uiFileOffset = %d\n",sFileInfo.uiFileOffset);
+//	AppLog("DownloadFile sFileInfo.uiCurFileSize = %d\n",sFileInfo.uiCurFileSize);
+//	AppLog("DownloadFile uiReqOffset = %d\n",uiReqOffset);
+	if(sFileInfo.uiCurFileSize > BLK_LENGTH_MAX){
+		return FILEDOWNLOAD_ERR_BLKOVERSIZE;
+	}
+	memcpy(sFileInfo.ucFileContent, pucRequest + uiReqOffset, sFileInfo.uiCurFileSize);
+
+//	AppLog("DownloadFile uiReqOffset = %d\n",uiReqOffset);
+//	AppLog("DownloadFile  sFileInfo.ucFileContent = %s\n",sFileInfo.ucFileContent);
+
+	//download step
+	if(sFileInfo.uiFileOffset == 0)
+	{
+		eDownLoadStep = REMOTE_LOAD_BEGIN;
+	}
+	else if(sFileInfo.uiFileSize == sFileInfo.uiFileOffset + sFileInfo.uiCurFileSize)
+	{
+		eDownLoadStep = REMOTE_LOAD_END;
+	}
+	else
+	{
+		eDownLoadStep = REMOTE_LOAD_WRITE;
+	}
+	//get file type
+	usFileType = GetFileType((char*)sFileInfo.ucFileName);
+	switch(usFileType){
+	case PARA_FILE:
+		iRet = UpdateParamFile(sFileInfo);
+//		AppLog("DownloadFile  UpdateParamFile iRet = %d\n",iRet);
+		if(iRet == 0){
+			sv_ReadFile(sFileInfo);
+			return 0;
+		}
+		else if(iRet == FILEDOWNLOAD_ERR_FILEEXIST){
+			return FILEDOWNLOAD_ERR_FILEEXIST;
+		}
+		else if(iRet == FILEDOWNLOAD_ERR_WRITEFAILED){
+			return FILEDOWNLOAD_ERR_WRITEFAILED;
+		}
+		else if(iRet == FILEDOWNLOAD_ERR_PARAFILE_SAVE){
+			return FILEDOWNLOAD_ERR_PARAFILE_SAVE;
+		}
+		else{
+			return iRet;
+		}
+		break;
+	case MONITOR_FILE:
+	case FONT_FILE:
+	case PROLIN_OS_FILE:
+	case PROLIN_APP_FILE:
+		iRet = UpdateFirmware(usFileType, eDownLoadStep, sFileInfo.ucFileContent, sFileInfo.uiCurFileSize);
+		if(iRet == 0){
+			return 0;
+		}
+		else if(iRet == FILEDOWNLOAD_ERR_FILEEXIST){
+			return FILEDOWNLOAD_ERR_FILEEXIST;
+		}
+		else if(iRet == FILEDOWNLOAD_ERR_OPENFAILED){
+			return FILEDOWNLOAD_ERR_OPENFAILED;
+		}
+		else if(iRet == FILEDOWNLOAD_ERR_WRITEFAILED){
+			return FILEDOWNLOAD_ERR_WRITEFAILED;
+		}
+		else{
+			return FILEDOWNLOAD_ERR_FIRMWARE_SAVE;
+		}
+		break;
+	}
+//	sv_ReadFile(sFileInfo);
+	return 0;
+}
+
+

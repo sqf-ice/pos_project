@@ -1,0 +1,12 @@
+ui.c:156:13:SetCustomizedFont	48	static
+ui.c:106:12:SetShowAlign	24	static
+ui.c:21:6:GetMsgData	32	static
+ui.c:45:5:GetItemNum	12	static
+ui.c:56:5:GetInputType	8	static
+ui.c:66:6:GetSubStr	56	static
+ui.c:281:12:1	1448	static
+ui.c:183:5:MenuProcess	56	static
+ui.c:634:5:EShowMsgBox	1056	static
+ui.c:729:5:EShowInputBox	1056	static
+ui.c:804:5:EShowMenuList	4680	static
+ui.c:909:5:ShowMsgBox	1728	static

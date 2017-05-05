@@ -1,0 +1,8 @@
+remotedownload.c:19:5:GetTermSN	56	static
+remotedownload.c:39:5:GetTermExtSN	56	static
+remotedownload.c:59:5:GetTermVerInfo	56	static
+remotedownload.c:74:5:GetTerminalInfo	88	static
+remotedownload.c:433:5:RemoteDownload_TaskInfo	288	static
+remotedownload.c:651:5:GetTaskInfoFromFile	48	static
+remotedownload.c:893:5:RemoteDownload_SaveData	336	static
+remotedownload.c:1039:5:RemoteDownload_TaskAsk	168	static

@@ -1,0 +1,8 @@
+parammgmt.c:257:12:0	144	static
+parammgmt.c:208:12:1	24	static
+parammgmt.c:115:5:SetConfigurationData	40	static
+parammgmt.c:161:5:GetConfigurationData	48	static
+parammgmt.c:290:5:SetData	96	static
+parammgmt.c:592:5:GetData	1128	static
+parammgmt.c:832:5:LoadTLVDataFromFSToMem	32	static
+parammgmt.c:907:5:GetAllTLVDataFromMem	16	static

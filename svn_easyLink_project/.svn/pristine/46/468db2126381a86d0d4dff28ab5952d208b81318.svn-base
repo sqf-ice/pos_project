@@ -1,0 +1,59 @@
+//============================================================================
+// Name        : filedownload.c
+// Author      :tuxq
+// Version     :
+// Copyright   : Your copyright notice
+// Description : Ansi-style
+//============================================================================
+#include "..\inc\global.h"
+
+int  DownloadFile(const uchar * pucRequest, const ushort usReqLength)
+{
+	int iRet = 0,iFd = 0;
+	SFileInfo sFileInfo;
+	uint uiReqOffset = 0, uiLength = 0, uiCurFileSize = 0;
+
+	memset(&sFileInfo, 0, sizeof(SFileInfo));
+
+	while(uiReqOffset < usReqLength){
+		uiLength = pucRequest[0];
+		uiReqOffset++;
+		memcpy(sFileInfo.ucFileName, pucRequest + uiReqOffset, uiLength);
+		uiReqOffset +=  uiLength;
+		sFileInfo.uiFileSize = (uint)pucRequest[uiReqOffset] | (uint)pucRequest[uiReqOffset+1]<<8 | (uint)pucRequest[uiReqOffset+2]<<16 |(uint)pucRequest[uiReqOffset+3]<<24;
+		uiReqOffset += sizeof(uint);
+		sFileInfo.uiCurFileSize = (uint)pucRequest[uiReqOffset] | (uint)pucRequest[uiReqOffset+1]<<8 | (uint)pucRequest[uiReqOffset+2]<<16 |(uint)pucRequest[uiReqOffset+3]<<24;
+		uiReqOffset += sizeof(uint);
+		if(sFileInfo.uiCurFileSize > BLK_LENGTH_MAX)
+			return FILEDOWNLOAD_ERR_BLKOVERSIZE;
+		else{
+			memcpy(sFileInfo.ucFileContent, pucRequest + uiReqOffset, sFileInfo.uiCurFileSize);
+			uiReqOffset += sFileInfo.uiCurFileSize;
+		}
+	}
+
+	//if file not exist,create one;if exist,open it
+	iFd = PdkFile_Open ((char*)sFileInfo.ucFileName);
+	if(iFd < 0){
+		//create failed
+		return FILEDOWNLOAD_ERR_OPENFAILED;
+	}
+	
+	//get current file size
+	uiCurFileSize = PdkFile_GetSize((char*)sFileInfo.ucFileName);
+	if(uiCurFileSize < sFileInfo.uiFileSize){
+		PdkFile_Seek (iFd, uiCurFileSize, SEEK_CUR);//relocate file
+		iRet = PdkFile_Write (iFd, sFileInfo.ucFileContent, sFileInfo.uiCurFileSize);//byte
+		if(iRet != sFileInfo.uiCurFileSize)
+		{
+			return FILEDOWNLOAD_ERR_DOWNLOADFAILED;
+		}
+		PdkFile_Close(iFd);
+	}
+	else{
+		//file exist
+		return FILEDOWNLOAD_ERR_FILEEXIST;
+	}
+	//download success
+	return RET_OK;
+}

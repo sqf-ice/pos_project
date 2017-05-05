@@ -1,0 +1,208 @@
+/*
+ * ============================================================================
+ * COPYRIGHT
+ *              Pax CORPORATION PROPRIETARY INFORMATION
+ *   This software is supplied under the terms of a license agreement or
+ *   nondisclosure agreement with Pax Corporation and may not be copied
+ *   or disclosed except in accordance with the terms in that agreement.
+ *      Copyright (C) 2016 Pax Corporation. All rights reserved.
+ * Module Date:2016/08/09     
+ * Module Auth:huangwp     
+ * Description:global var
+ *      
+ * ============================================================================
+ */
+
+#ifndef _GLOBAL_H
+#define _GLOBAL_H
+
+#include <String.h>
+#include <Stdarg.h>
+#include <Stdlib.h>
+#include <Stdio.h>
+
+#include <posapi.h>
+
+#include "comm.h"
+#include "bt.h"
+#include "ui.h"
+#include "sofTimer.h" 
+#include "protocol.h"
+#include "xmlparse.h"
+#include "file.h"
+#include "appLib.h"
+#include "UiXmlFileOp.h"
+
+#include "ped_encrypt.h"
+
+#include "EmvIIApi.h"
+#include "EmvApi.h"
+#include "CL_common.h"
+#include "CLEntryApi.h"
+#include "L2_Device.h"
+#include "ClssApi_MC.h"
+#include "ClssApi_WAVE.h"
+
+#include "transmain.h"
+#include "parammgmt.h"
+#include "emvproc.h"
+#include "clssproc.h"
+
+#include "filedownload.h"
+
+#include "remotedownload.h"
+
+//emvtest.h for testing
+#include "emvtest.h"
+
+#define APP_DEBUG
+
+// **** Timer **********************************
+#define TIMER_TRANS  3
+
+// **** Timer end *******************************
+
+// ==== COMM ==================================
+#define COMM_DEBUG_	// Added by Zhangyuan
+
+#define BUF_LEN_24		24
+#define BUF_LEN_512		512
+#define BUF_LEN_1024	1024
+#define BUF_LEN_2042	2042
+#define BUF_LEN_2048	2048
+
+#define EL_RESPONSE_CMD_OFFSET			8
+#define EL_RESPONSE_STATUS_OFFSET		10
+#define EL_RESPONSE_DATA_OFFSET			14
+
+typedef struct{	
+   short addr;	/* eeprom地址 */
+   char *szBuf;	/* 数据指针 */
+   int len;	/* 数据长度*/
+}T_ConfigArg;
+
+extern unsigned char g_ucCommPort;
+extern int g_UsbOpenFlag;
+extern int g_BtOpenFlag;
+extern int g_ConnectFlag;
+extern int ProtocolType;
+// ==== COMM END ==============================
+
+// ==== FILE ==================================
+#define BLK_LEN         1024
+
+extern FILE_INFO_T g_stFileInfo[MAX_FILE_CNT];
+
+// ==== FILE END ==============================
+
+typedef struct _tagCURRENCY_CONFIG 
+{
+	uchar	szName[3+1];	        // short for currency, e.g. "HKD", "USD"
+	uchar	sCurrencyCode[2];		// ISO-4217   currency code, e.g. NTD"\x09\x01"
+    uchar   sCountryCode[2];        // ISO-3166-1 Country or area Code, e.g. Taiwan Province"\x01\x58"
+	uchar	ucDecimal;		        // Decimal currency. e.g. JPY is 0, USD，HKD are 2, some are 3
+	uchar	ucIgnoreDigit;	        // ignore digits at tail, when convert amount from ISO8583 field 4
+}CURRENCY_CONFIG;
+
+extern uchar g_ucIsFallBack;
+
+#define EMV_CAPK_LIST_FILE	"emvCapkListFile"
+#define PAYPASS_TORN_LOG_FILE "KernalFileMCTornLog"
+#define EMV_APP_LIST_FILE "emvAppListFile"
+
+
+//***************************************************************************************
+//Transaction return code
+//***************************************************************************************
+#define TRANS_BASE						5000
+#define TRANS_ICC_RESET_ERR				(TRANS_BASE - 1)
+#define TRANS_ICC_CMD_ERR				(TRANS_BASE - 2)
+#define TRANS_ICC_BLOCK					(TRANS_BASE - 3)
+#define TRANS_EMV_RSP_ERR				(TRANS_BASE - 4)
+#define TRANS_EMV_APP_BLOCK				(TRANS_BASE - 5)
+#define TRANS_EMV_NO_APP				(TRANS_BASE - 6)
+#define TRANS_EMV_USER_CANCEL			(TRANS_BASE - 7)
+#define TRANS_EMV_TIME_OUT				(TRANS_BASE - 8)
+#define TRANS_EMV_DATA_ERR				(TRANS_BASE - 9)
+#define TRANS_EMV_NOT_ACCEPT			(TRANS_BASE - 10)
+#define TRANS_EMV_DENIAL				(TRANS_BASE - 11)
+#define TRANS_EMV_KEY_EXP				(TRANS_BASE - 12)
+#define TRANS_EMV_NO_PINPAD				(TRANS_BASE - 13)
+#define TRANS_EMV_NO_PASSWORD			(TRANS_BASE - 14)
+#define TRANS_EMV_SUM_ERR				(TRANS_BASE - 15)
+#define TRANS_EMV_NOT_FOUND				(TRANS_BASE - 16)
+#define TRANS_EMV_NO_DATA				(TRANS_BASE - 17)
+#define TRANS_EMV_OVERFLOW				(TRANS_BASE - 18)
+#define TRANS_NO_TRANS_LOG				(TRANS_BASE - 19)
+#define TRANS_RECORD_NOTEXIST			(TRANS_BASE - 20)
+#define TRANS_LOGITEM_NOTEXIST			(TRANS_BASE - 21)
+#define TRANS_ICC_RSP_6985				(TRANS_BASE - 22)
+#define TRANS_CLSS_USE_CONTACT			(TRANS_BASE - 23)
+#define TRANS_EMV_FILE_ERR				(TRANS_BASE - 24)
+#define TRANS_CLSS_TERMINATE			(TRANS_BASE - 25)
+#define TRANS_CLSS_FAILED				(TRANS_BASE - 26)
+#define TRANS_CLSS_DECLINE				(TRANS_BASE - 27)
+#define TRANS_CLSS_TRY_ANOTHER_CARD		(TRANS_BASE - 28)
+//#define TRANS_						(TRANS_BASE - 29)
+#define TRANS_PARAM_ERR					(TRANS_BASE - 30)
+#define TRANS_CLSS_WAVE2_OVERSEA		(TRANS_BASE - 31)
+#define TRANS_CLSS_WAVE2_TERMINATED		(TRANS_BASE - 32)
+#define TRANS_CLSS_WAVE2_US_CARD		(TRANS_BASE - 33)
+#define TRANS_CLSS_WAVE3_INS_CARD		(TRANS_BASE - 34)
+#define TRANS_CLSS_RESELECT_APP			(TRANS_BASE - 35)
+#define TRANS_CLSS_CARD_EXPIRED			(TRANS_BASE - 36)
+#define TRANS_EMV_NO_APP_PPSE_ERR		(TRANS_BASE - 37)
+#define TRANS_CLSS_USE_VSDC				(TRANS_BASE - 38)
+#define TRANS_CLSS_CVMDECLINE			(TRANS_BASE - 39)
+#define TRANS_CLSS_REFER_CONSUMER_DEVICE	(TRANS_BASE - 40)
+#define TRANS_CLSS_LAST_CMD_ERR			(TRANS_BASE - 41)
+#define TRANS_CLSS_API_ORDER_ERR		(TRANS_BASE - 42)
+//******************************************************************************************
+
+// ====== Error code definition ========
+#define EL_EMV_RET_BASE							3000
+#define EL_EMV_RET_FALLBACK						(EL_EMV_RET_BASE + 1)
+#define EL_EMV_RET_USER_CANCEL					(EL_EMV_RET_BASE + 2)
+#define EL_EMV_RET_CARD_DATA_ERR				(EL_EMV_RET_BASE + 3)
+#define EL_EMV_RET_NO_APP						(EL_EMV_RET_BASE + 4)
+#define EL_EMV_RET_TRANS_FAIL					(EL_EMV_RET_BASE + 5)
+#define EL_EMV_RET_TRANS_DENIAL					(EL_EMV_RET_BASE + 6)
+#define EL_EMV_RET_TRANS_DECLINED				(EL_EMV_RET_BASE + 7)
+#define EL_EMV_RET_TRANS_REQUEST_GO_ONLINE		(EL_EMV_RET_BASE + 8)
+
+
+// ====== Table file block distribution =============
+
+#define TABLE_FS_BLOCK_SIZE					1024
+
+#define FILE_EMV_PARAM_INFO_BLOCK_START		190
+#define FILE_EMV_AID_INFO_BLOCK_START		191
+#define FILE_EMV_CAPK_INFO_BLOCK_START		195
+
+#define FILE_EMV_CAPK_BLOCK_START			200
+#define FILE_EMV_REVOKE_CAPK_BLOCK_START	300
+
+#define FILE_EMV_AID_BLOCK_START			400
+#define FILE_EMV_PARAMETER_BLOCK_START		500
+#define FILE_EMV_EXTM_PARAM_BLOCK_START		510
+#define FILE_EMV_MCK_PARAM_BLOCK_START		511
+//Added by Kevin Liu for paypass torn log.
+#define FILE_EMV_BLOCK_START_TORN_LOG		900
+#define FILE_EMV_BLOCK_START_TLV_DATA		1000
+
+
+
+
+// ====== Table file block distribution  end ========
+
+
+// ======== Remote Download Begin=========================
+
+extern unsigned char	g_ucRebootFlag;
+
+// ======== Remote Download End ==========================
+
+#endif	// _GLOBAL_H
+
+// end of file
+
