@@ -1,0 +1,46 @@
+ sudo apt-get install pptpd
+
+
+sudo vi /etc/ppp/options
+ms-dns 8.8.8.8
+ms-dns 8.8.4.4
+编辑/etc/pptpd.conf 修改客户端获取的地址
+开启IP转发，编辑 /etc/sysctl.conf 文件，去掉下面代码前面的
+net.ipv4.ip_forward=1
+执行 sysctl -p 让改变生效
+
+添加VPN用户名密码
+编辑 /etc/ppp/chap-secrets 文件，按下面格式输入： 用户名 pptpd 密码 *
+
+lugoo pptpd lugoo *
+name pptpd password *
+
+/etc/init.d/pptpd restart
+
+#iptables -t nat -A POSTROUTING -s 192.168.10.0/24 -o eth1 -j MASQUERADE
+iptables -A POSTROUTING -t nat -s 192.168.10.0/24 -j SNAT --to 服务器IP地址
+
+
+//add
+iptables -A FORWARD -p tcp --syn -s 192.168.10.0/24 -j TCPMSS --set-mss 1356
+
+//
+latest effect version
+/etc/init.d/pptpd restart
+iptables -A POSTROUTING -t nat -s 192.168.10.0/24 -j SNAT --to 47.90.87.82 &
+
+for example:
+/etc/init.d/pptpd restart
+iptables -A POSTROUTING -t nat -s 192.168.10.0/24 -j SNAT --to 139.196.167.170 &
+-------------------
+make oldconfig
+make prepare
+make scripts
+iptables -t nat -A POSTROUTING -s 192.168.10.0/24 -o eth1 -j MASQUERADE
+iptables -A POSTROUTING -t nat -s 192.168.10.0/24 -j SNAT --to 47.90.200.254
+iptables -A FORWARD -p tcp --syn -s 192.168.10.0/24 -j TCPMSS --set-mss 1356
+
+
+iptables -t nat -A POSTROUTING -s 192.168.10.0/24 -o eth1 -j MASQUERADE
+iptables -A POSTROUTING -t nat -s 192.168.10.0/24 -j SNAT --to 139.196.167.170
+iptables -A FORWARD -p tcp --syn -s 192.168.10.0/24 -j TCPMSS --set-mss 1356
