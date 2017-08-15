@@ -1,0 +1,8 @@
+[app]
+id=MobilePay
+name=MobilePay
+bin=MobilePay
+artwork=
+desc=PAX POS Application
+vender=PAX
+version=1.00.00
